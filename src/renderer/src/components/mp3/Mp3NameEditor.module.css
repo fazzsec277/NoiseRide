@@ -1,0 +1,76 @@
+.displayWrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.editBtn {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+.displayWrapper:hover .editBtn {
+  opacity: 1;
+}
+
+.editBtn:hover {
+  color: var(--accent);
+}
+
+.editWrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.confirmBtn {
+  font-size: 12px;
+  color: var(--success);
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.confirmBtn:hover {
+  background: rgba(0, 230, 118, 0.12);
+}
+
+.cancelBtn {
+  font-size: 12px;
+  color: var(--danger);
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 82, 82, 0.12);
+}

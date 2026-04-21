@@ -1,0 +1,50 @@
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 160px;
+  z-index: 100;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+
+.item:hover {
+  background: var(--bg-hover);
+}
+
+.item.danger {
+  color: var(--danger);
+}
+
+.item.danger:hover {
+  background: rgba(255, 82, 82, 0.1);
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.label {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>NoiseRide - シークバー UI モック</title>
+<style>
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-hover: #1e2a45;
+    --border: #2a3560;
+    --text-primary: #e0e0e0;
+    --text-secondary: #9ba4b5;
+    --text-muted: #5a6480;
+    --accent: #7c83fd;
+    --accent-light: rgba(124,131,253,0.15);
+    --success: #4ade80;
+    --playing-bg: rgba(124,131,253,0.07);
+    --playing-border: rgba(124,131,253,0.3);
+    --radius: 6px;
+    --radius-sm: 4px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+  }
+
+  h2 {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+  }
+  .note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    padding-left: 4px;
+  }
+
+  /* ====== SHARED ROW STYLES ====== */
+  .list-wrap {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+
+  .list-header {
+    display: grid;
+    padding: 5px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .row {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--bg-hover); }
+  .row.playing { background: var(--playing-bg); border-bottom-color: var(--playing-border); }
+  .row-main {
+    display: grid;
+    align-items: center;
+    padding: 7px 12px;
+  }
+
+  .col-drag { color: var(--text-muted); font-size: 14px; cursor: grab; user-select: none; text-align: center; }
+  .col-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .col-keys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .col-vol { display: flex; align-items: center; gap: 4px; }
+  .col-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+
+  .play-btn {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 9px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; cursor: pointer;
+  }
+  .play-btn.active {
+    background: var(--success);
+    color: #000;
+    border-color: var(--success);
+  }
+
+  .name { font-size: 12px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .key-tag {
+    font-size: 10px; padding: 1px 5px;
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 3px; color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .vol-slider { width: 60px; height: 4px; accent-color: var(--accent); }
+  .vol-label { font-size: 10px; color: var(--text-muted); font-family: monospace; min-width: 28px; }
+  .loop-btn, .menu-btn {
+    width: 24px; height: 24px; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-muted); font-size: 14px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .loop-btn.on { color: var(--accent); background: var(--accent-light); }
+
+  /* ========== OPTION A: INLINE ========== */
+  .option-a .list-header,
+  .option-a .row-main {
+    grid-template-columns: 24px 1fr 180px 160px 110px 90px;
+    gap: 0 8px;
+  }
+
+  .col-progress-a {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .seek-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .seek-thumb {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    box-shadow: 0 0 4px var(--accent);
+  }
+  .seek-thumb.idle { background: var(--text-muted); box-shadow: none; }
+
+  .seek-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: visible;
+    position: relative;
+    cursor: pointer;
+  }
+  .seek-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    position: relative;
+  }
+  .seek-fill::after {
+    content: '';
+    position: absolute;
+    right: -4px; top: -3px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .seek-bar-wrap:hover .seek-fill::after { opacity: 1; }
+
+  .time-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: monospace;
+    white-space: nowrap;
+  }
+  .time-label .elapsed { color: var(--text-secondary); }
+  .time-label .total { color: var(--text-muted); }
+
+  /* ========== OPTION B: FULL-WIDTH BAR ========== */
+  .option-b .list-header,
+  .option-b .row-main {
+    grid-template-columns: 24px 1fr 180px 90px 80px 110px 90px;
+    gap: 0 8px;
+  }
+
+  .col-dur-b {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .dur-main { font-size: 12px; font-family: monospace; color: var(--text-secondary); }
+  .dur-total { font-size: 10px; color: var(--text-muted); }
+
+  .col-status-b {
+    display: flex; align-items: center; gap: 5px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+  .status-text { font-size: 11px; color: var(--success); }
+
+  .seek-bar-bottom {
+    height: 3px;
+    background: var(--bg-tertiary);
+    position: relative;
+    cursor: pointer;
+  }
+  .seek-bar-bottom .seek-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 0;
+  }
+  .seek-bar-bottom::after {
+    content: 'ドラッグでシーク可能';
+    position: absolute;
+    right: 8px;
+    top: -16px;
+    font-size: 9px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .seek-bar-bottom:hover::after { opacity: 1; }
+  .seek-bar-bottom:hover { height: 5px; }
+  .seek-bar-bottom .handle {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 11px; height: 11px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .seek-bar-bottom:hover .handle { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ===== OPTION A ===== -->
+<h2>案A ― インラインシークバー（推奨）</h2>
+<p class="note">「時間列」「状態列」を廃止し、1列にシークバー＋時間表示をまとめる。行の高さは変わらない。</p>
+
+<div class="list-wrap option-a">
+  <div class="list-header">
+    <div></div>
+    <div>名前</div>
+    <div>キーバインド</div>
+    <div>再生位置</div>
+    <div>音量</div>
+    <div>操作</div>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn">▶</div>
+        <span class="name">爆発音</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag">F1</span>
+        <span class="key-tag">F2</span>
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-progress-a">
+        <div class="seek-row">
+          <div class="seek-thumb idle"></div>
+          <div class="seek-bar-wrap" style="cursor:pointer">
+            <div class="seek-fill" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="time-label">
+          <span class="elapsed">0:00</span><span class="total"> / 0:03</span>
+        </div>
+      </div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="75" min="0" max="200">
+        <span class="vol-label">75%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 再生中 -->
+  <div class="row playing">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn active">■</div>
+        <span class="name">rain.mp3</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag">Ctrl+F3</span>
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-progress-a">
+        <div class="seek-row">
+          <div class="seek-thumb"></div>
+          <div class="seek-bar-wrap">
+            <div class="seek-fill" style="width:35%"></div>
+          </div>
+        </div>
+        <div class="time-label">
+          <span class="elapsed">0:28</span><span class="total"> / 1:20</span>
+        </div>
+      </div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="100" min="0" max="200">
+        <span class="vol-label">100%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn on">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 停止中2 -->
+  <div class="row">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn">▶</div>
+        <span class="name">crowd.mp3</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-progress-a">
+        <div class="seek-row">
+          <div class="seek-thumb idle"></div>
+          <div class="seek-bar-wrap">
+            <div class="seek-fill" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="time-label">
+          <span class="elapsed">0:00</span><span class="total"> / 0:45</span>
+        </div>
+      </div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="120" min="0" max="200">
+        <span class="vol-label">120%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== OPTION B ===== -->
+<h2>案B ― フル幅シークバー（行下部に表示）</h2>
+<p class="note">既存の列はそのまま。再生中の行の下端にフル幅のシークバーが現れる。時間は「時間列」に表示。</p>
+
+<div class="list-wrap option-b">
+  <div class="list-header">
+    <div></div>
+    <div>名前</div>
+    <div>キーバインド</div>
+    <div>時間</div>
+    <div>状態</div>
+    <div>音量</div>
+    <div>操作</div>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn">▶</div>
+        <span class="name">爆発音</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag">F1</span>
+        <span class="key-tag">F2</span>
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-dur-b">
+        <span class="dur-main" style="color:var(--text-muted)">0:03</span>
+      </div>
+      <div class="col-status-b"></div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="75" min="0" max="200">
+        <span class="vol-label">75%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 再生中 -->
+  <div class="row playing">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn active">■</div>
+        <span class="name">rain.mp3</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag">Ctrl+F3</span>
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-dur-b">
+        <span class="dur-main"><span style="color:var(--text-secondary)">0:28</span> / 1:20</span>
+      </div>
+      <div class="col-status-b">
+        <div class="dot"></div>
+        <span class="status-text">再生中</span>
+      </div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="100" min="0" max="200">
+        <span class="vol-label">100%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn on">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+    <!-- フル幅シークバー -->
+    <div class="seek-bar-bottom">
+      <div class="seek-fill" style="width:35%"></div>
+      <div class="handle" style="left: calc(35% - 5px)"></div>
+    </div>
+  </div>
+
+  <!-- 停止中2 -->
+  <div class="row">
+    <div class="row-main">
+      <div class="col-drag">⠿</div>
+      <div class="col-name">
+        <div class="play-btn">▶</div>
+        <span class="name">crowd.mp3</span>
+      </div>
+      <div class="col-keys">
+        <span class="key-tag" style="color:var(--accent)">＋</span>
+      </div>
+      <div class="col-dur-b">
+        <span class="dur-main" style="color:var(--text-muted)">0:45</span>
+      </div>
+      <div class="col-status-b"></div>
+      <div class="col-vol">
+        <input type="range" class="vol-slider" value="120" min="0" max="200">
+        <span class="vol-label">120%</span>
+      </div>
+      <div class="col-actions">
+        <div class="loop-btn">↺</div>
+        <div class="menu-btn">⋮</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+  ※ シークバーにホバーするとドラッグ用のハンドル（●）が表示されます
+</p>
+
+</body>
+</html>

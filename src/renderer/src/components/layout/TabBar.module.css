@@ -1,0 +1,226 @@
+.tabBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 44px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.tabArea {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+  padding: 6px 0;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.arrowBtn {
+  width: 24px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+  z-index: 2;
+}
+
+.arrowBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.arrowBtn.arrowDisabled {
+  opacity: 0.2;
+  cursor: default;
+  pointer-events: none;
+}
+
+.fadeLeft,
+.fadeRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.fadeLeft {
+  left: 24px;
+  background: linear-gradient(to right, var(--bg-secondary), transparent);
+}
+
+.fadeRight {
+  right: 24px;
+  background: linear-gradient(to left, var(--bg-secondary), transparent);
+}
+
+.fadeVisible {
+  opacity: 1;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  min-width: 0;
+  max-width: 140px;
+  flex-shrink: 0;
+}
+
+.tab.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tab:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.tabLabel {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tabInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  width: 80px;
+}
+
+.tabClose {
+  font-size: 14px;
+  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.tabClose:hover {
+  color: var(--danger);
+  background: rgba(255, 82, 82, 0.12);
+}
+
+.addTab {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.addTab:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.randomBtn {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+  white-space: nowrap;
+  width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.randomBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.randomBtn.randomOn {
+  background: var(--random-bg);
+  border-color: var(--random-color);
+  color: var(--random-color);
+}
+
+.randomBtn.randomOn:hover {
+  border-color: var(--random-color);
+  color: var(--random-color);
+}
+
+.addFileBtn {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.addFileBtn:hover {
+  background: var(--accent-hover);
+}
+
+.tab.dropTarget {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}

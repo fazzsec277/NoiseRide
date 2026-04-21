@@ -1,0 +1,52 @@
+.container {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px;
+  line-height: 1.6;
+}
+
+.list {
+  padding: 0;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 24px 1fr 200px 110px 110px 130px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.colDrag,
+.colName,
+.colKeys,
+.colDur,
+.colVolume,
+.colActions {
+  display: flex;
+  align-items: center;
+}
+
+.dropTarget {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}

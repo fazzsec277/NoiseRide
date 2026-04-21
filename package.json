@@ -1,0 +1,45 @@
+{
+  "name": "noiseride",
+  "version": "1.0.0",
+  "description": "Local MP3 soundboard with keybindings",
+  "main": "./out/main/index.js",
+  "author": "",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:win": "npm run build && electron-builder --win",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5",
+    "uuid": "^11.1.0",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3"
+  },
+  "build": {
+    "appId": "com.noiseride.app",
+    "productName": "NoiseRide",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

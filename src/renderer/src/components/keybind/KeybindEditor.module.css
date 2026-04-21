@@ -1,0 +1,64 @@
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.keyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px 2px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.keyBadge.warn {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: rgba(255, 171, 64, 0.1);
+}
+
+.removeKey {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+  line-height: 1;
+}
+
+.removeKey:hover {
+  color: var(--danger);
+}
+
+.captureBtn {
+  padding: 2px 8px;
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.captureBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.captureBtn.capturing {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+  animation: pulse 1s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

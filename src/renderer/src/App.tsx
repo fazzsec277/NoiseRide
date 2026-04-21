@@ -1,0 +1,107 @@
+import { useEffect, useState } from 'react'
+import { useMp3Store } from './stores/mp3Store'
+import { useSettingsStore } from './stores/settingsStore'
+import { audioManager } from './managers/AudioManager'
+import { useShortcutListener } from './hooks/useShortcutListener'
+import { useFileDrop } from './hooks/useFileDrop'
+import { useAudioEnded } from './hooks/useAudioEnded'
+import { Header } from './components/layout/Header'
+import { TabBar } from './components/layout/TabBar'
+import { Mp3List } from './components/mp3/Mp3List'
+import { SettingsModal } from './components/settings/SettingsModal'
+import type { AppData } from './shared/types'
+
+interface Api {
+  storage: {
+    load: () => Promise<AppData>
+    save: (data: AppData) => Promise<void>
+  }
+  shortcut: {
+    sync: (keybindMap: Record<string, string[]>) => Promise<void>
+    register: (key: string, mp3Ids: string[]) => Promise<boolean>
+    unregister: (key: string) => Promise<void>
+    onTriggered: (cb: (key: string) => void) => () => void
+  }
+  dialog: {
+    openMp3: () => Promise<string[]>
+  }
+  readFileBuffer: (filePath: string) => Promise<Uint8Array>
+  onFileDropped: (cb: (paths: string[]) => void) => () => void
+}
+
+declare global {
+  interface Window {
+    api: Api
+  }
+}
+
+export default function App(): JSX.Element {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const loadFromData = useMp3Store((s) => s.loadFromData)
+  const mp3s = useMp3Store((s) => s.mp3s)
+  const presets = useMp3Store((s) => s.presets)
+  const toAppData = useMp3Store((s) => s.toAppData)
+  const activePresetId = useMp3Store((s) => s.activePresetId)
+  const settings = useSettingsStore((s) => s.settings)
+  const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const updateSettings = useSettingsStore((s) => s.updateSettings)
+
+  useShortcutListener()
+  useFileDrop(activePresetId === 'global' ? undefined : activePresetId)
+  useAudioEnded()
+
+  useEffect(() => {
+    window.api.storage.load().then((data) => {
+      loadFromData(data)
+      loadSettings(data.settings)
+      audioManager.setOutputDevices(data.settings.outputDeviceIds ?? [])
+    })
+  }, [loadFromData, loadSettings])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', settings.theme)
+  }, [settings.theme])
+
+  useEffect(() => {
+    audioManager.setMasterVolume(settings.masterVolume)
+  }, [settings.masterVolume])
+
+  useEffect(() => {
+    audioManager.setOutputDevices(settings.outputDeviceIds)
+  }, [settings.outputDeviceIds])
+
+  useEffect(() => {
+    const appData = { ...toAppData(), settings }
+    window.api.storage.save(appData)
+  }, [mp3s, presets, settings, toAppData])
+
+  const activePreset = presets.find((p) => p.id === activePresetId)
+
+  const orderedMp3s =
+    activePresetId === 'global'
+      ? (() => {
+          const globalPreset = presets.find((p) => p.id === 'global')
+          if (!globalPreset) return visibleMp3s
+          return globalPreset.mp3Ids
+            .map((id) => mp3s.find((m) => m.id === id))
+            .filter((m): m is NonNullable<typeof m> => m !== undefined)
+        })()
+      : (activePreset?.mp3Ids ?? [])
+          .map((id) => mp3s.find((m) => m.id === id))
+          .filter((m): m is NonNullable<typeof m> => m !== undefined)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <Header onSettingsClick={() => setSettingsOpen(true)} />
+      <TabBar />
+      <Mp3List mp3s={orderedMp3s} activePresetId={activePresetId} />
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onUpdate={updateSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+    </div>
+  )
+}

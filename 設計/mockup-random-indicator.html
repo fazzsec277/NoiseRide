@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>NoiseRide - ランダム再生インジケーター UI モック</title>
+<style>
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-hover: #1e2a45;
+    --border: #2a3560;
+    --text-primary: #e0e0e0;
+    --text-secondary: #9ba4b5;
+    --text-muted: #5a6480;
+    --accent: #7c83fd;
+    --accent-light: rgba(124,131,253,0.15);
+    --success: #4ade80;
+    --playing-bg: rgba(124,131,253,0.07);
+    --playing-border: rgba(124,131,253,0.3);
+    --random-color: #fb923c;
+    --random-bg: rgba(251,146,60,0.07);
+    --random-border: rgba(251,146,60,0.3);
+    --random-light: rgba(251,146,60,0.15);
+    --radius: 6px;
+    --radius-sm: 4px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    max-width: 860px;
+  }
+
+  h2 {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+  }
+  .note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    padding-left: 4px;
+  }
+
+  /* ====== LIST ====== */
+  .list-wrap {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 36px;
+  }
+
+  .list-header {
+    display: grid;
+    grid-template-columns: 24px 1fr 200px 110px 110px 130px;
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ====== ROW BASE ====== */
+  .row {
+    display: grid;
+    grid-template-columns: 24px 1fr 200px 110px 110px 130px;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    transition: background 0.15s;
+  }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--bg-hover); }
+
+  /* ====== PLAYING STATES (shared) ====== */
+  .row.playing-manual {
+    background: var(--playing-bg);
+    border-bottom-color: var(--playing-border);
+  }
+  .row.playing-random {
+    background: var(--random-bg);
+    border-bottom-color: var(--random-border);
+  }
+
+  /* ====== COLUMNS ====== */
+  .col-drag {
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+    cursor: grab;
+    user-select: none;
+  }
+  .col-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .col-keys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .col-dur { font-size: 11px; color: var(--text-muted); font-family: 'Consolas', monospace; white-space: nowrap; }
+  .col-vol { display: flex; align-items: center; gap: 4px; }
+  .col-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+
+  /* ====== PLAY BUTTON ====== */
+  .play-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  /* 手動再生中: 既存の緑 */
+  .play-btn.manual { background: var(--success); color: #000; border-color: var(--success); }
+  /* ランダム再生中: 案B オレンジ */
+  .play-btn.random  { background: var(--random-color); color: #000; border-color: var(--random-color); }
+
+  /* ====== KEYBIND TAGS ====== */
+  .key-tag {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-family: 'Consolas', monospace;
+    white-space: nowrap;
+  }
+  .key-add { color: var(--text-muted); font-size: 11px; cursor: pointer; }
+
+  /* ====== NAME ====== */
+  .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ====== VOLUME ====== */
+  input[type=range] {
+    width: 64px; height: 4px;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+  .vol-label { font-size: 10px; color: var(--text-muted); font-family: 'Consolas', monospace; min-width: 30px; }
+
+  /* ====== ACTION BUTTONS ====== */
+  .icon-btn {
+    width: 26px; height: 26px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .icon-btn.on { color: var(--accent); background: var(--accent-light); }
+  .menu-btn { width: 28px; height: 28px; font-size: 18px; }
+
+  /* ====== SEEK BAR ====== */
+  .seek-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    cursor: pointer;
+  }
+  .seek-fill-manual { height: 100%; background: var(--accent); width: 35%; }
+  .seek-fill-random { height: 100%; background: var(--random-color); width: 62%; }
+
+  /* ====== CASE A: LEFT BORDER STRIPE ====== */
+  .border-manual { border-left: 3px solid var(--accent); }
+  .border-random  { border-left: 3px solid var(--random-color); }
+
+  /* ====== LEGEND ====== */
+  .legend {
+    display: flex; gap: 20px; margin-bottom: 10px; font-size: 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .legend-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .dot-stop   { background: var(--text-muted); }
+  .dot-manual { background: var(--success); }
+  .dot-random { background: var(--random-color); }
+
+  .section-gap { margin-bottom: 48px; }
+</style>
+</head>
+<body>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-stop"></div> 停止中</div>
+  <div class="legend-item"><div class="legend-dot dot-manual"></div> 手動再生中</div>
+  <div class="legend-item"><div class="legend-dot dot-random"></div> ランダム再生中</div>
+</div>
+
+<!-- ============================================================ -->
+<!--  案A: 左端ボーダーストライプ                               -->
+<!-- ============================================================ -->
+<h2>案A: 左端ボーダーストライプ</h2>
+<p class="note">再生中の行の左端に縦線を追加。手動＝青紫、ランダム＝オレンジ で識別する。再生ボタンの色は変わらない。</p>
+
+<div class="list-wrap">
+  <div class="list-header">
+    <span></span>
+    <span>名前</span>
+    <span>キーバインド</span>
+    <span>時間</span>
+    <span>音量</span>
+    <span></span>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">crowd.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F3</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 0:45</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+
+  <!-- 手動再生中 (案A: 左青ボーダー) -->
+  <div class="row playing-manual border-manual">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn manual">■</div>
+      <span class="name">rain.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F1</span>
+      <span class="key-tag">F2</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:28 / 1:20</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn on">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-manual"></div></div>
+  </div>
+
+  <!-- ランダム再生中 (案A: 左オレンジボーダー) -->
+  <div class="row playing-random border-random">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn manual">■</div>
+      <span class="name">explosion.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F5</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:02 / 0:03</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="75" disabled>
+      <span class="vol-label">75%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-random"></div></div>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">bgm_loop.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 3:14</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="130" disabled>
+      <span class="vol-label">130%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn on">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<!-- ============================================================ -->
+<!--  案B: 再生ボタンの色を変える                               -->
+<!-- ============================================================ -->
+<h2>案B: 再生ボタンの色を変える</h2>
+<p class="note">■（停止）ボタンの色で識別。手動＝緑、ランダム＝オレンジ。行の背景色も色違いで変わる。</p>
+
+<div class="list-wrap">
+  <div class="list-header">
+    <span></span>
+    <span>名前</span>
+    <span>キーバインド</span>
+    <span>時間</span>
+    <span>音量</span>
+    <span></span>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">crowd.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F3</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 0:45</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+
+  <!-- 手動再生中 (案B: ■ボタン 緑) -->
+  <div class="row playing-manual">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn manual">■</div>
+      <span class="name">rain.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F1</span>
+      <span class="key-tag">F2</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:28 / 1:20</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn on">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-manual"></div></div>
+  </div>
+
+  <!-- ランダム再生中 (案B: ■ボタン オレンジ) -->
+  <div class="row playing-random">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn random">■</div>
+      <span class="name">explosion.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F5</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:02 / 0:03</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="75" disabled>
+      <span class="vol-label">75%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-random"></div></div>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">bgm_loop.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 3:14</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="130" disabled>
+      <span class="vol-label">130%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn on">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<!-- ============================================================ -->
+<!--  案A+B 組み合わせ                                          -->
+<!-- ============================================================ -->
+<h2>案A＋B 組み合わせ（両方適用）</h2>
+<p class="note">左端ボーダー＋再生ボタン色変更を同時に適用した場合のイメージ。視認性が最も高い。</p>
+
+<div class="list-wrap">
+  <div class="list-header">
+    <span></span>
+    <span>名前</span>
+    <span>キーバインド</span>
+    <span>時間</span>
+    <span>音量</span>
+    <span></span>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">crowd.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F3</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 0:45</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+
+  <!-- 手動再生中 -->
+  <div class="row playing-manual border-manual">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn manual">■</div>
+      <span class="name">rain.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F1</span>
+      <span class="key-tag">F2</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:28 / 1:20</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="100" disabled>
+      <span class="vol-label">100%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn on">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-manual"></div></div>
+  </div>
+
+  <!-- ランダム再生中 -->
+  <div class="row playing-random border-random">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn random">■</div>
+      <span class="name">explosion.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-tag">F5</span>
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:02 / 0:03</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="75" disabled>
+      <span class="vol-label">75%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+    <div class="seek-bar"><div class="seek-fill-random"></div></div>
+  </div>
+
+  <!-- 停止中 -->
+  <div class="row">
+    <span class="col-drag">⠿</span>
+    <div class="col-name">
+      <div class="play-btn">▶</div>
+      <span class="name">bgm_loop.mp3</span>
+    </div>
+    <div class="col-keys">
+      <span class="key-add">＋</span>
+    </div>
+    <div class="col-dur">0:00 / 3:14</div>
+    <div class="col-vol">
+      <input type="range" min="0" max="200" value="130" disabled>
+      <span class="vol-label">130%</span>
+    </div>
+    <div class="col-actions">
+      <div class="icon-btn on">↺</div>
+      <div class="icon-btn">↩</div>
+      <div class="icon-btn menu-btn">⋮</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
