@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  height: 48px;
+  height: 72px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
@@ -112,10 +112,25 @@
   white-space: nowrap;
 }
 
-.volumeControl {
-  display: flex;
+.deviceControls {
+  display: grid;
+  grid-template-columns: 28px 100px 36px 160px;
+  grid-template-rows: auto auto;
+  gap: 4px 6px;
   align-items: center;
-  gap: 6px;
+}
+
+.micIcon {
+  font-size: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  text-align: center;
+  transition: filter 0.15s;
+}
+
+.micIconMuted {
+  filter: brightness(0.6) sepia(1) saturate(5) hue-rotate(310deg);
 }
 
 .volumeIcon {
@@ -123,20 +138,22 @@
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
+  text-align: center;
 }
 
-.volumeSlider {
+.deviceSlider {
   width: 100px;
   height: 4px;
   cursor: pointer;
   accent-color: var(--accent);
 }
 
-.volumeValue {
+.deviceValue {
   font-size: 11px;
   color: var(--text-secondary);
   font-family: 'Consolas', monospace;
   min-width: 32px;
+  text-align: right;
 }
 
 .settingsBtn {

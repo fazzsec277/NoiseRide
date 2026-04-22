@@ -9,6 +9,7 @@ import { Header } from './components/layout/Header'
 import { TabBar } from './components/layout/TabBar'
 import { Mp3List } from './components/mp3/Mp3List'
 import { SettingsModal } from './components/settings/SettingsModal'
+import { VoiceChangerTab } from './components/voicechanger/VoiceChangerTab'
 import type { AppData } from './shared/types'
 
 interface Api {
@@ -35,8 +36,34 @@ declare global {
   }
 }
 
+type MainTab = 'soundboard' | 'voicechanger'
+
+const mainTabBarStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 0,
+  borderBottom: '1px solid var(--border)',
+  background: 'var(--bg-secondary)',
+  flexShrink: 0,
+}
+
+function mainTabBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: '8px 20px',
+    fontSize: 13,
+    fontWeight: 600,
+    background: 'none',
+    border: 'none',
+    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+    cursor: 'pointer',
+    transition: 'color 0.15s, border-color 0.15s',
+    marginBottom: -1,
+  }
+}
+
 export default function App(): JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mainTab, setMainTab] = useState<MainTab>('soundboard')
   const loadFromData = useMp3Store((s) => s.loadFromData)
   const mp3s = useMp3Store((s) => s.mp3s)
   const presets = useMp3Store((s) => s.presets)
@@ -93,8 +120,22 @@ export default function App(): JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Header onSettingsClick={() => setSettingsOpen(true)} />
-      <TabBar />
-      <Mp3List mp3s={orderedMp3s} activePresetId={activePresetId} />
+      <div style={mainTabBarStyle}>
+        <button style={mainTabBtnStyle(mainTab === 'soundboard')} onClick={() => setMainTab('soundboard')}>
+          サウンドボード
+        </button>
+        <button style={mainTabBtnStyle(mainTab === 'voicechanger')} onClick={() => setMainTab('voicechanger')}>
+          ボイスチェンジャー
+        </button>
+      </div>
+      {mainTab === 'soundboard' ? (
+        <>
+          <TabBar />
+          <Mp3List mp3s={orderedMp3s} activePresetId={activePresetId} />
+        </>
+      ) : (
+        <VoiceChangerTab />
+      )}
       {settingsOpen && (
         <SettingsModal
           settings={settings}

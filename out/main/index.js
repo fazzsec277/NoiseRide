@@ -155,7 +155,11 @@ const DEFAULT_SETTINGS = {
   maxConcurrent: 10,
   masterVolume: 0.8,
   theme: "dark",
-  outputDeviceIds: []
+  outputDeviceIds: [],
+  micDeviceId: "",
+  micInputGain: 1,
+  micMuted: false,
+  micPitchSemitones: 0
 };
 const GLOBAL_PRESET_ID = "global";
 function getDataFile() {
