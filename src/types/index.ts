@@ -20,6 +20,10 @@ export interface Settings {
   masterVolume: number
   theme: 'dark' | 'light'
   outputDeviceIds: string[]
+  micDeviceId: string
+  micInputGain: number
+  micMuted: boolean
+  micPitchSemitones: number
 }
 
 export interface AppData {
@@ -32,7 +36,11 @@ export const DEFAULT_SETTINGS: Settings = {
   maxConcurrent: 10,
   masterVolume: 0.8,
   theme: 'dark',
-  outputDeviceIds: []
+  outputDeviceIds: [],
+  micDeviceId: '',
+  micInputGain: 1.0,
+  micMuted: false,
+  micPitchSemitones: 0
 }
 
 export const GLOBAL_PRESET_ID = 'global'

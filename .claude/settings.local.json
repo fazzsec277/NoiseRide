@@ -21,7 +21,10 @@
       "Bash(cp \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\\\\package.json\" /c/NoiseRideTest/)",
       "Bash(echo \"{}\")",
       "Read(//c/NoiseRideTest/**)",
-      "Read(//c/Users/exia0/.claude/plans/**)"
+      "Read(//c/Users/exia0/.claude/plans/**)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(node --version 2>&1)",
+      "Bash(npx tsc *)"
     ]
   }
 }
