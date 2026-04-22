@@ -53,6 +53,20 @@ const api = {
       return () => ipcRenderer.off('shortcut:triggered', handler)
     }
   },
+  ptk: {
+    onKeyDown: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('ptk:keydown', h)
+      return () => ipcRenderer.off('ptk:keydown', h)
+    },
+    onKeyUp: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('ptk:keyup', h)
+      return () => ipcRenderer.off('ptk:keyup', h)
+    },
+    setKey: (accelerator: string): Promise<void> =>
+      ipcRenderer.invoke('ptk:setKey', accelerator)
+  },
   dialog: {
     openMp3: (): Promise<string[]> => ipcRenderer.invoke('dialog:openMp3')
   },

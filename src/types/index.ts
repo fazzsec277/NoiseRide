@@ -24,6 +24,8 @@ export interface Settings {
   micInputGain: number
   micMuted: boolean
   micPitchSemitones: number
+  micPushToKey: boolean
+  micPushToKeyBind: string
 }
 
 export interface AppData {
@@ -40,7 +42,9 @@ export const DEFAULT_SETTINGS: Settings = {
   micDeviceId: '',
   micInputGain: 1.0,
   micMuted: false,
-  micPitchSemitones: 0
+  micPitchSemitones: 0,
+  micPushToKey: false,
+  micPushToKeyBind: ''
 }
 
 export const GLOBAL_PRESET_ID = 'global'

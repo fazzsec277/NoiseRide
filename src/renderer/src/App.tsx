@@ -5,6 +5,7 @@ import { audioManager } from './managers/AudioManager'
 import { useShortcutListener } from './hooks/useShortcutListener'
 import { useFileDrop } from './hooks/useFileDrop'
 import { useAudioEnded } from './hooks/useAudioEnded'
+import { useMicController } from './hooks/useMicController'
 import { Header } from './components/layout/Header'
 import { TabBar } from './components/layout/TabBar'
 import { Mp3List } from './components/mp3/Mp3List'
@@ -22,6 +23,11 @@ interface Api {
     register: (key: string, mp3Ids: string[]) => Promise<boolean>
     unregister: (key: string) => Promise<void>
     onTriggered: (cb: (key: string) => void) => () => void
+  }
+  ptk: {
+    onKeyDown: (cb: () => void) => () => void
+    onKeyUp: (cb: () => void) => () => void
+    setKey: (accelerator: string) => Promise<void>
   }
   dialog: {
     openMp3: () => Promise<string[]>
@@ -76,6 +82,7 @@ export default function App(): JSX.Element {
   useShortcutListener()
   useFileDrop(activePresetId === 'global' ? undefined : activePresetId)
   useAudioEnded()
+  useMicController()
 
   useEffect(() => {
     window.api.storage.load().then((data) => {

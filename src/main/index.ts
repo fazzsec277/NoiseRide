@@ -83,6 +83,11 @@ ipcMain.handle('shortcut:unregister', (_e, key: string): void => {
   shortcutManager?.unregister(key)
 })
 
+// ── PTK IPC ──────────────────────────────────────────────────
+ipcMain.handle('ptk:setKey', (_e, accelerator: string): void => {
+  shortcutManager?.setPtkKey(accelerator)
+})
+
 // ── File Buffer IPC ──────────────────────────────────────────
 ipcMain.handle('file:readBuffer', (_e, filePath: string): Buffer => {
   return readFileSync(filePath)

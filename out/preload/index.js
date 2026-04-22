@@ -36,6 +36,19 @@ const api = {
       return () => electron.ipcRenderer.off("shortcut:triggered", handler);
     }
   },
+  ptk: {
+    onKeyDown: (cb) => {
+      const h = () => cb();
+      electron.ipcRenderer.on("ptk:keydown", h);
+      return () => electron.ipcRenderer.off("ptk:keydown", h);
+    },
+    onKeyUp: (cb) => {
+      const h = () => cb();
+      electron.ipcRenderer.on("ptk:keyup", h);
+      return () => electron.ipcRenderer.off("ptk:keyup", h);
+    },
+    setKey: (accelerator) => electron.ipcRenderer.invoke("ptk:setKey", accelerator)
+  },
   dialog: {
     openMp3: () => electron.ipcRenderer.invoke("dialog:openMp3")
   },

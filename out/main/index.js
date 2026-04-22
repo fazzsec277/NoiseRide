@@ -115,6 +115,7 @@ function acceleratorToSpec(accelerator) {
 class ShortcutManager {
   win;
   shortcuts = /* @__PURE__ */ new Map();
+  ptkKeycode = null;
   constructor(win) {
     this.win = win;
     uiohookNapi.uIOhook.on("keydown", (e) => {
@@ -126,8 +127,21 @@ class ShortcutManager {
           this.win.webContents.send("shortcut:triggered", { key: accelerator });
         }
       }
+      if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
+        this.win.webContents.send("ptk:keydown");
+      }
+    });
+    uiohookNapi.uIOhook.on("keyup", (e) => {
+      if (this.win.isDestroyed() || this.win.isFocused()) return;
+      if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
+        this.win.webContents.send("ptk:keyup");
+      }
     });
     uiohookNapi.uIOhook.start();
+  }
+  setPtkKey(accelerator) {
+    const spec = acceleratorToSpec(accelerator);
+    this.ptkKeycode = spec ? spec.keycode : null;
   }
   syncKeybinds(keybindMap) {
     this.shortcuts.clear();
@@ -159,7 +173,9 @@ const DEFAULT_SETTINGS = {
   micDeviceId: "",
   micInputGain: 1,
   micMuted: false,
-  micPitchSemitones: 0
+  micPitchSemitones: 0,
+  micPushToKey: false,
+  micPushToKeyBind: ""
 };
 const GLOBAL_PRESET_ID = "global";
 function getDataFile() {
@@ -250,6 +266,9 @@ electron.ipcMain.handle("shortcut:register", (_e, key, mp3Ids) => {
 });
 electron.ipcMain.handle("shortcut:unregister", (_e, key) => {
   shortcutManager?.unregister(key);
+});
+electron.ipcMain.handle("ptk:setKey", (_e, accelerator) => {
+  shortcutManager?.setPtkKey(accelerator);
 });
 electron.ipcMain.handle("file:readBuffer", (_e, filePath) => {
   return fs.readFileSync(filePath);

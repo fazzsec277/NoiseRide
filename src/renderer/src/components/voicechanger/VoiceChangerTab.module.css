@@ -93,6 +93,103 @@
   cursor: not-allowed;
 }
 
+.modeGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.modeBtn {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.modeBtn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.modeBtnActive {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.modeBtnActive:hover {
+  opacity: 0.9;
+}
+
+.keyGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyBadge {
+  font-size: 12px;
+  font-family: 'Consolas', monospace;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  color: var(--text-primary);
+}
+
+.clearBtn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.clearBtn:hover {
+  background: rgba(229, 57, 53, 0.15);
+  border-color: #e53935;
+  color: #e53935;
+}
+
+.recordBtn {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.recordBtn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.recordBtnActive {
+  background: rgba(124, 77, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .sliderValue {
   font-size: 11px;
   color: var(--text-secondary);

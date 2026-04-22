@@ -82,6 +82,7 @@ function acceleratorToSpec(accelerator: string): KeySpec | null {
 export class ShortcutManager {
   private win: BrowserWindow
   private shortcuts = new Map<string, string[]>()
+  private ptkKeycode: number | null = null
 
   constructor(win: BrowserWindow) {
     this.win = win
@@ -103,9 +104,25 @@ export class ShortcutManager {
           this.win.webContents.send('shortcut:triggered', { key: accelerator })
         }
       }
+
+      if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
+        this.win.webContents.send('ptk:keydown')
+      }
+    })
+
+    uIOhook.on('keyup', (e) => {
+      if (this.win.isDestroyed() || this.win.isFocused()) return
+      if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
+        this.win.webContents.send('ptk:keyup')
+      }
     })
 
     uIOhook.start()
+  }
+
+  setPtkKey(accelerator: string): void {
+    const spec = acceleratorToSpec(accelerator)
+    this.ptkKeycode = spec ? spec.keycode : null
   }
 
   syncKeybinds(keybindMap: Record<string, string[]>): void {

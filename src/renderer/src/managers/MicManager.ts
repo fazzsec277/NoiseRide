@@ -10,6 +10,11 @@ class MicManager {
   private stream: MediaStream | null = null
   private currentGain = 1.0
   private isMuted = false
+  private ptkMuted = false
+
+  private effectiveGain(): number {
+    return this.ptkMuted || this.isMuted ? 0 : this.currentGain
+  }
 
   async enumerateDevices(): Promise<MediaDeviceInfo[]> {
     await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {})
@@ -38,7 +43,7 @@ class MicManager {
 
       const source = ctx.createMediaStreamSource(this.stream)
       const gainNode = ctx.createGain()
-      gainNode.gain.value = this.isMuted ? 0 : this.currentGain
+      gainNode.gain.value = this.effectiveGain()
 
       source.connect(gainNode)
       gainNode.connect(ctx.destination)
@@ -68,18 +73,29 @@ class MicManager {
     this.analyser = null
   }
 
+  isRunning(): boolean {
+    return this.stream !== null
+  }
+
   setGain(gain: number): void {
     this.currentGain = gain
-    if (!this.isMuted) {
-      for (const { gainNode } of this.ctxMap.values()) {
-        gainNode.gain.value = gain
-      }
+    const value = this.effectiveGain()
+    for (const { gainNode } of this.ctxMap.values()) {
+      gainNode.gain.value = value
     }
   }
 
   setMuted(muted: boolean): void {
     this.isMuted = muted
-    const value = muted ? 0 : this.currentGain
+    const value = this.effectiveGain()
+    for (const { gainNode } of this.ctxMap.values()) {
+      gainNode.gain.value = value
+    }
+  }
+
+  setPtkMuted(muted: boolean): void {
+    this.ptkMuted = muted
+    const value = this.effectiveGain()
     for (const { gainNode } of this.ctxMap.values()) {
       gainNode.gain.value = value
     }
