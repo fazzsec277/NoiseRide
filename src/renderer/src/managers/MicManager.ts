@@ -28,7 +28,12 @@ class MicManager {
     this.currentGain = inputGain
 
     const constraints: MediaStreamConstraints = {
-      audio: micDeviceId ? { deviceId: { exact: micDeviceId } } : true
+      audio: {
+        ...(micDeviceId ? { deviceId: { exact: micDeviceId } } : {}),
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      }
     }
     this.stream = await navigator.mediaDevices.getUserMedia(constraints)
 
