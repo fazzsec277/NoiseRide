@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>NoiseRide - Voice Changer UI Mock v5</title>
+<style>
+  :root {
+    --bg-primary:   #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary:  #0f3460;
+    --bg-hover:     #1e2a4a;
+    --text-primary: #e0e0f0;
+    --text-secondary: #a0a0c0;
+    --text-muted:   #6060a0;
+    --accent:       #7c4dff;
+    --accent-hover: #9c6dff;
+    --accent-light: rgba(124,77,255,0.15);
+    --success:      #00e676;
+    --border:       rgba(255,255,255,0.08);
+    --border-hover: rgba(255,255,255,0.16);
+    --playing-bg:   rgba(0,230,118,0.08);
+    --playing-border: rgba(0,230,118,0.4);
+    --random-color: #fb923c;
+    --random-bg:    rgba(251,146,60,0.07);
+    --random-border: rgba(251,146,60,0.3);
+    --shadow:       0 2px 12px rgba(0,0,0,0.4);
+    --radius:       8px;
+    --radius-sm:    4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; background: var(--bg-primary); color: var(--text-primary); }
+
+  /* ===== WINDOW ===== */
+  .window { width: 880px; margin: 20px auto; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .window-title { background: var(--bg-secondary); padding: 6px 14px; font-size: 11px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+
+  /* ===== HEADER (existing design + mic row added) ===== */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    min-height: 64px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+  .title-icon { font-size: 18px; color: var(--accent); }
+  .controls { display: flex; align-items: center; gap: 8px; }
+
+  /* device-controls: 2-row grid
+     col1=28px(mute/icon) col2=100px(slider①) col3=36px(%) col4=160px(dropdown)
+     right-aligned as part of .controls ② | no 🎵 ③ */
+  .device-controls {
+    display: grid;
+    grid-template-columns: 28px 100px 36px 160px;
+    grid-template-rows: auto auto;
+    row-gap: 5px;
+    column-gap: 6px;
+    align-items: center;
+  }
+  .mic-mute-btn { grid-column:1; grid-row:1; width:26px; height:26px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; transition:background .15s,border-color .15s,color .15s; }
+  .mic-mute-btn:hover { border-color:var(--border-hover); color:var(--text-primary); }
+  .mic-mute-btn.muted { background:rgba(255,82,82,.15); border-color:rgba(255,82,82,.4); color:#ff5252; }
+  .mic-slider { grid-column:2; grid-row:1; }
+  .mic-pct    { grid-column:3; grid-row:1; font-size:11px; color:var(--text-secondary); font-family:"Consolas",monospace; text-align:right; min-width:32px; }
+  .mic-dd     { grid-column:4; grid-row:1; }
+  .audio-icon { grid-column:1; grid-row:2; width:26px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; cursor:pointer; }
+  .audio-slider{ grid-column:2; grid-row:2; }
+  .audio-pct  { grid-column:3; grid-row:2; font-size:11px; color:var(--text-secondary); font-family:"Consolas",monospace; text-align:right; min-width:32px; }
+  .audio-dd   { grid-column:4; grid-row:2; }
+
+  .slider-wrap { display:flex; align-items:center; }
+  .slider-wrap input[type=range] { width:100%; height:4px; cursor:pointer; -webkit-appearance:none; appearance:none; background:linear-gradient(to right, var(--accent) 60%, var(--bg-hover) 60%); border-radius:2px; outline:none; }
+  .slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid var(--bg-secondary); }
+
+  .dd-btn { display:flex; align-items:center; gap:6px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-secondary); padding:4px 8px; font-size:12px; cursor:pointer; width:100%; transition:border-color .15s; }
+  .dd-btn:hover { border-color:var(--accent); color:var(--text-primary); }
+  .dd-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; text-align:left; }
+  .dd-caret { font-size:9px; flex-shrink:0; color:var(--text-muted); }
+
+  .settings-btn { width:32px; height:32px; border-radius:var(--radius-sm); background:var(--bg-tertiary); color:var(--text-secondary); font-size:16px; display:flex; align-items:center; justify-content:center; transition:background .15s,color .15s; border:none; cursor:pointer; flex-shrink:0; }
+  .settings-btn:hover { background:var(--accent-light); color:var(--accent); }
+
+  /* ===== MAIN TAB ROW (NEW — soundboard / voice changer) ===== */
+  .main-tabbar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    /* no padding-bottom — tabs sit flush with border */
+  }
+  .main-tab {
+    padding: 8px 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .main-tab:hover { color: var(--text-secondary); }
+  .main-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ===== PRESET TAB ROW (existing, shown only when soundboard active) ===== */
+  .tabbar { background:var(--bg-primary); border-bottom:1px solid var(--border); padding:6px 8px 0; display:flex; align-items:flex-end; gap:4px; }
+  .tab { padding:5px 14px; border-radius:6px 6px 0 0; background:var(--bg-secondary); border:1px solid var(--border); border-bottom:none; cursor:pointer; font-size:12px; color:var(--text-secondary); white-space:nowrap; max-width:140px; overflow:hidden; text-overflow:ellipsis; transition:background .15s; }
+  .tab.active { background:var(--bg-primary); color:var(--text-primary); border-color:var(--border-hover); }
+  .random-btn { margin-left:auto; margin-bottom:4px; padding:4px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); cursor:pointer; font-size:12px; width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .random-btn.on { background:var(--random-bg); border-color:var(--random-border); color:var(--random-color); }
+  .add-btn { margin-bottom:4px; padding:4px 10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-secondary); cursor:pointer; font-size:12px; }
+
+  /* ===== MP3 LIST ===== */
+  .content { background:var(--bg-primary); padding:12px 16px; min-height:120px; }
+  .list-header { display:grid; grid-template-columns:24px 1fr 200px 110px 110px 130px; padding:3px 8px; border-bottom:1px solid var(--border); color:var(--text-muted); font-size:11px; margin-bottom:4px; }
+  .mp3-row { display:grid; grid-template-columns:24px 1fr 200px 110px 110px 130px; padding:6px 8px; border-radius:var(--radius-sm); align-items:center; border:1px solid transparent; position:relative; gap:4px; margin-bottom:2px; background:var(--bg-secondary); }
+  .mp3-row.playing { background:var(--playing-bg); border-color:var(--playing-border); }
+  .drag-h { color:var(--text-muted); font-size:12px; }
+  .pbtn { width:22px; height:22px; border-radius:var(--radius-sm); border:none; background:var(--bg-hover); color:var(--text-primary); cursor:pointer; font-size:11px; }
+  .pbtn.on { background:var(--accent); color:white; }
+  .kbtags { display:flex; gap:3px; flex-wrap:wrap; }
+  .kb { background:var(--bg-hover); border:1px solid var(--border-hover); border-radius:var(--radius-sm); padding:1px 5px; font-size:10px; color:var(--text-secondary); }
+  .tc { font-size:11px; color:var(--text-muted); font-family:"Consolas",monospace; }
+  .tc.act { color:var(--text-primary); }
+  .acts { display:flex; gap:3px; align-items:center; justify-content:flex-end; }
+  .ibtn { width:24px; height:24px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-secondary); color:var(--text-muted); cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; }
+  .ibtn.on { background:var(--accent-light); border-color:rgba(124,77,255,.4); color:var(--accent); }
+  .seek { position:absolute; bottom:0; left:0; right:0; height:3px; background:var(--bg-tertiary); border-radius:0 0 var(--radius-sm) var(--radius-sm); overflow:hidden; }
+  .seek-fill { height:100%; background:var(--accent); width:35%; }
+
+  /* ===== VOICE CHANGER CONTENT ===== */
+  .vc-content { background:var(--bg-primary); padding:16px; }
+  .vc-card { background:var(--bg-secondary); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; border:1px solid var(--border); }
+  .vc-title { font-size:11px; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .vc-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .vc-lbl { font-size:12px; color:var(--text-secondary); width:64px; flex-shrink:0; }
+  .vc-slider { flex:1; }
+  .vc-slider input[type=range] { width:100%; height:4px; -webkit-appearance:none; background:linear-gradient(to right, var(--accent) 50%, var(--bg-hover) 50%); border-radius:2px; outline:none; cursor:pointer; }
+  .vc-slider input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid var(--bg-secondary); }
+  .vc-val { font-size:11px; color:var(--text-secondary); width:36px; text-align:right; font-family:"Consolas",monospace; }
+  .level-wrap { flex:1; height:8px; background:var(--bg-hover); border-radius:var(--radius-sm); overflow:hidden; }
+  .level-bar { height:100%; background:linear-gradient(to right, var(--success), #ffab40, #ff5252); border-radius:var(--radius-sm); width:45%; }
+  .disabled-section { opacity:.4; pointer-events:none; }
+  .vc-note { font-size:11px; color:var(--text-muted); margin-top:6px; font-style:italic; }
+
+  /* ===== PAGE ===== */
+  .page { padding:18px; max-width:920px; margin:0 auto; }
+  h1 { color:var(--text-primary); font-size:17px; margin-bottom:3px; }
+  .sub { color:var(--text-muted); font-size:12px; margin-bottom:18px; }
+  .sec-label { font-size:11px; color:var(--random-color); font-weight:bold; margin-top:22px; margin-bottom:5px; padding:4px 8px; background:var(--random-bg); border-left:3px solid var(--random-color); border-radius:0 var(--radius-sm) var(--radius-sm) 0; }
+  .note-box { font-size:10px; color:var(--accent); background:var(--accent-light); border-left:2px solid var(--accent); padding:4px 8px; border-radius:0 var(--radius-sm) var(--radius-sm) 0; margin-bottom:8px; line-height:1.7; }
+  hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>NoiseRide Header Mock v5</h1>
+<p class="sub">v5 &#x2014; &#x30E1;&#x30A4;&#x30F3;&#x30BF;&#x30D6;&#x884C;&#xFF08;&#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;/VC&#xFF09;&#x3092;&#x30D7;&#x30EA;&#x30BB;&#x30C3;&#x30C8;&#x30BF;&#x30D6;&#x884C;&#x306E;&#x4E0A;&#x306B;&#x8FFD;&#x52A0;</p>
+
+<!-- ===== Pattern 1: Soundboard active ===== -->
+<div class="sec-label">&#x30D1;&#x30BF;&#x30FC;&#x30F3;1: &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;&#x9078;&#x629E;&#x4E2D;&#xFF08;&#x30DE;&#x30A4;&#x30AF;&#x30DF;&#x30E5;&#x30FC;&#x30C8;OFF&#xFF09;</div>
+<div class="note-box">
+  &#x30D8;&#x30C3;&#x30C0;&#x30FC; &#x2192; &#x30E1;&#x30A4;&#x30F3;&#x30BF;&#x30D6;&#x884C;&#xFF08;&#x65B0;&#x898F;&#xFF09; &#x2192; &#x30D7;&#x30EA;&#x30BB;&#x30C3;&#x30C8;&#x30BF;&#x30D6;&#x884C;&#xFF08;&#x65E2;&#x5B58;&#xFF09; &#x2192; MP3&#x30EA;&#x30B9;&#x30C8;&#xFF08;&#x65E2;&#x5B58;&#xFF09;<br>
+  &#x30E1;&#x30A4;&#x30F3;&#x30BF;&#x30D6;&#x884C;&#x306F;&#x65B0;&#x898F;&#x8FFD;&#x52A0;&#x3002;&#x30D7;&#x30EA;&#x30BB;&#x30C3;&#x30C8;&#x30BF;&#x30D6;&#x884C;&#x30FBMP3&#x30EA;&#x30B9;&#x30C8;&#x306F;&#x5909;&#x66F4;&#x306A;&#x3057;&#x3002;
+</div>
+
+<div class="window">
+  <div class="window-title">NoiseRide</div>
+
+  <!-- 1. Header (existing + mic row) -->
+  <div class="header">
+    <div class="title"><span class="title-icon">&#x266A;</span><span>NoiseRide</span></div>
+    <div class="controls">
+      <div class="device-controls">
+        <!-- Row 1: Mic -->
+        <button class="mic-mute-btn">&#x1F3A4;</button>
+        <div class="slider-wrap mic-slider"><input type="range" min="0" max="200" value="100"></div>
+        <span class="mic-pct">100%</span>
+        <button class="dd-btn mic-dd"><span class="dd-label">OS&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8; (&#x30DE;&#x30A4;&#x30AF;)</span><span class="dd-caret">&#x25BC;</span></button>
+        <!-- Row 2: Audio -->
+        <span class="audio-icon">&#x1F50A;</span>
+        <div class="slider-wrap audio-slider"><input type="range" min="0" max="100" value="80"></div>
+        <span class="audio-pct">80%</span>
+        <button class="dd-btn audio-dd"><span class="dd-label">&#x30B7;&#x30B9;&#x30C6;&#x30E0;&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8;</span><span class="dd-caret">&#x25BC;</span></button>
+      </div>
+      <button class="settings-btn">&#x2699;</button>
+    </div>
+  </div>
+
+  <!-- 2. Main tab row (NEW) -->
+  <div class="main-tabbar">
+    <div class="main-tab active">&#x1F3B5; &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;</div>
+    <div class="main-tab">&#x1F3A4; &#x30DC;&#x30A4;&#x30B9;&#x30C1;&#x30A7;&#x30F3;&#x30B8;&#x30E3;&#x30FC;</div>
+  </div>
+
+  <!-- 3. Preset tab row (EXISTING — no change) -->
+  <div class="tabbar">
+    <div class="tab active">&#x5168;&#x4F53;</div>
+    <div class="tab">BGM</div>
+    <div class="tab">SE</div>
+    <div class="tab">+ &#x8FFD;&#x52A0;</div>
+    <button class="random-btn">&#x21C4; &#x30E9;&#x30F3;&#x30C0;&#x30E0;</button>
+    <button class="add-btn">+ &#x30D5;&#x30A1;&#x30A4;&#x30EB;&#x8FFD;&#x52A0;</button>
+  </div>
+
+  <!-- 4. MP3 list (EXISTING — no change) -->
+  <div class="content">
+    <div class="list-header"><span></span><span>&#x540D;&#x524D;</span><span>&#x30AD;&#x30FC;&#x30D0;&#x30A4;&#x30F3;&#x30C9;</span><span>&#x6642;&#x9593;</span><span>&#x97F3;&#x91CF;</span><span>&#x64CD;&#x4F5C;</span></div>
+    <div class="mp3-row playing">
+      <span class="drag-h">&#x2823;</span>
+      <span><button class="pbtn on">&#x25A0;</button> rain.mp3</span>
+      <div class="kbtags"><span class="kb">F3</span></div>
+      <span class="tc act">0:28 / 1:20</span>
+      <span class="tc">100%</span>
+      <div class="acts"><button class="ibtn on">&#x21BA;</button><button class="ibtn">&#x21A9;</button><button class="ibtn">&#x22EE;</button></div>
+      <div class="seek"><div class="seek-fill"></div></div>
+    </div>
+    <div class="mp3-row">
+      <span class="drag-h">&#x2823;</span>
+      <span><button class="pbtn">&#x25B6;</button> &#x7206;&#x767A;&#x97F3;.mp3</span>
+      <div class="kbtags"><span class="kb">F1</span><span class="kb">F2</span></div>
+      <span class="tc">0:00 / 0:03</span>
+      <span class="tc">75%</span>
+      <div class="acts"><button class="ibtn">&#x21BA;</button><button class="ibtn">&#x21A9;</button><button class="ibtn">&#x22EE;</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Pattern 2: Soundboard, mic muted ===== -->
+<div class="sec-label">&#x30D1;&#x30BF;&#x30FC;&#x30F3;2: &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;&#x9078;&#x629E;&#x4E2D;&#xFF08;&#x30DE;&#x30A4;&#x30AF;&#x30DF;&#x30E5;&#x30FC;&#x30C8;ON&#xFF09;</div>
+<div class="note-box">&#x1F3A4;&#x30DC;&#x30BF;&#x30F3;&#x8D64;&#x8272;&#x3002;&#x30E9;&#x30F3;&#x30C0;&#x30E0;ON&#x72B6;&#x614B;&#x3082;&#x78BA;&#x8A8D;&#x3002;</div>
+
+<div class="window">
+  <div class="window-title">NoiseRide</div>
+  <div class="header">
+    <div class="title"><span class="title-icon">&#x266A;</span><span>NoiseRide</span></div>
+    <div class="controls">
+      <div class="device-controls">
+        <button class="mic-mute-btn muted">&#x1F3A4;</button>
+        <div class="slider-wrap mic-slider"><input type="range" min="0" max="200" value="100"></div>
+        <span class="mic-pct" style="color:#ff5252">100%</span>
+        <button class="dd-btn mic-dd"><span class="dd-label">OS&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8; (&#x30DE;&#x30A4;&#x30AF;)</span><span class="dd-caret">&#x25BC;</span></button>
+        <span class="audio-icon">&#x1F50A;</span>
+        <div class="slider-wrap audio-slider"><input type="range" min="0" max="100" value="80"></div>
+        <span class="audio-pct">80%</span>
+        <button class="dd-btn audio-dd"><span class="dd-label">&#x30B7;&#x30B9;&#x30C6;&#x30E0;&#x30C7;&#x30D5;&#x30A9;&#x30EB;&#x30C8;</span><span class="dd-caret">&#x25BC;</span></button>
+      </div>
+      <button class="settings-btn">&#x2699;</button>
+    </div>
+  </div>
+  <div class="main-tabbar">
+    <div class="main-tab active">&#x1F3B5; &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;</div>
+    <div class="main-tab">&#x1F3A4; &#x30DC;&#x30A4;&#x30B9;&#x30C1;&#x30A7;&#x30F3;&#x30B8;&#x30E3;&#x30FC;</div>
+  </div>
+  <div class="tabbar">
+    <div class="tab active">&#x5168;&#x4F53;</div>
+    <div class="tab">BGM</div>
+    <div class="tab">+ &#x8FFD;&#x52A0;</div>
+    <button class="random-btn on">&#x21C4; &#x30E9;&#x30F3;&#x30C0;&#x30E0;: BGM</button>
+    <button class="add-btn">+ &#x30D5;&#x30A1;&#x30A4;&#x30EB;&#x8FFD;&#x52A0;</button>
+  </div>
+  <div class="content" style="color:var(--text-muted);font-size:12px;display:flex;align-items:center;justify-content:center;min-height:70px;">&#xFF08;MP3&#x30EA;&#x30B9;&#x30C8;&#x306F;&#x7701;&#x7565;&#xFF09;</div>
+</div>
+
+<!-- ===== Pattern 3: Voice Changer tab active ===== -->
+<div class="sec-label">&#x30D1;&#x30BF;&#x30FC;&#x30F3;3: &#x30DC;&#x30A4;&#x30B9;&#x30C1;&#x30A7;&#x30F3;&#x30B8;&#x30E3;&#x30FC;&#x9078;&#x629E;&#x4E2D;</div>
+<div class="note-box">
+  VC&#x9078;&#x629E;&#x6642;&#x306F;&#x30D7;&#x30EA;&#x30BB;&#x30C3;&#x30C8;&#x30BF;&#x30D6;&#x884C;&#x306F;&#x975E;&#x8868;&#x793A;&#x3002;&#x30D8;&#x30C3;&#x30C0;&#x30FC;&#x306E;&#x30DE;&#x30A4;&#x30AF;&#x30B3;&#x30F3;&#x30C8;&#x30ED;&#x30FC;&#x30EB;&#x306F;&#x5F15;&#x304D;&#x7D9A;&#x304D;&#x64CD;&#x4F5C;&#x53EF;&#x80FD;&#x3002;
+</div>
+
+<div class="window">
+  <div class="window-title">NoiseRide</div>
+  <div class="header">
+    <div class="title"><span class="title-icon">&#x266A;</span><span>NoiseRide</span></div>
+    <div class="controls">
+      <div class="device-controls">
+        <button class="mic-mute-btn">&#x1F3A4;</button>
+        <div class="slider-wrap mic-slider"><input type="range" min="0" max="200" value="120"></div>
+        <span class="mic-pct">120%</span>
+        <button class="dd-btn mic-dd"><span class="dd-label">Blue Yeti USB</span><span class="dd-caret">&#x25BC;</span></button>
+        <span class="audio-icon">&#x1F50A;</span>
+        <div class="slider-wrap audio-slider"><input type="range" min="0" max="100" value="80"></div>
+        <span class="audio-pct">80%</span>
+        <button class="dd-btn audio-dd"><span class="dd-label">&#x30B9;&#x30D4;&#x30FC;&#x30AB;&#x30FC; (Realtek)</span><span class="dd-caret">&#x25BC;</span></button>
+      </div>
+      <button class="settings-btn">&#x2699;</button>
+    </div>
+  </div>
+  <!-- Main tab row: voice changer active, preset row hidden -->
+  <div class="main-tabbar">
+    <div class="main-tab">&#x1F3B5; &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;</div>
+    <div class="main-tab active">&#x1F3A4; &#x30DC;&#x30A4;&#x30B9;&#x30C1;&#x30A7;&#x30F3;&#x30B8;&#x30E3;&#x30FC;</div>
+  </div>
+  <!-- No preset tab row when VC is active -->
+  <div class="vc-content">
+    <div class="vc-card">
+      <div class="vc-title">&#x5165;&#x529B;&#x30EC;&#x30D9;&#x30EB;</div>
+      <div class="vc-row">
+        <span class="vc-lbl">&#x30EC;&#x30D9;&#x30EB;</span>
+        <div class="level-wrap"><div class="level-bar"></div></div>
+        <span class="vc-val" style="color:var(--success)">&#x25AE;&#x25AE;&#x25AE;</span>
+      </div>
+      <p class="vc-note">&#x203B; &#x30DE;&#x30A4;&#x30AF;&#x30D1;&#x30B9;&#x30B9;&#x30EB;&#x30FC;&#x306F;OS&#x8A2D;&#x5B9A;&#x3067;&#xFF08;&#x4F8B;: Voicemeeter&#x3001;&#x30B9;&#x30C6;&#x30EC;&#x30AA;&#x30DF;&#x30AD;&#x30B5;&#x30FC;&#xFF09;</p>
+    </div>
+    <div class="vc-card">
+      <div class="vc-title">&#x97F3;&#x58F0;&#x52A0;&#x5DE5;</div>
+      <div class="disabled-section">
+        <div class="vc-row">
+          <span class="vc-lbl">&#x30D4;&#x30C3;&#x30C1;</span>
+          <span style="font-size:11px;color:var(--text-muted)">-12</span>
+          <div class="vc-slider" style="margin:0 8px"><input type="range" min="-12" max="12" value="0"></div>
+          <span style="font-size:11px;color:var(--text-muted)">+12</span>
+          <span class="vc-val">0 st</span>
+        </div>
+      </div>
+      <p class="vc-note">&#x203B; &#x30D4;&#x30C3;&#x30C1;&#x5909;&#x63DB;&#x306F;&#x5C06;&#x6765;&#x5B9F;&#x88C5;&#x4E88;&#x5B9A;</p>
+    </div>
+  </div>
+</div>
+
+<hr>
+<div style="background:var(--bg-secondary);border-radius:var(--radius);padding:14px 16px;font-size:12px;color:var(--text-secondary);line-height:1.8;border:1px solid var(--border)">
+  <strong style="color:var(--text-primary)">&#x753B;&#x9762;&#x69CB;&#x6210;&#xFF08;&#x5C64;&#x6B21;&#x69CB;&#x9020;&#xFF09;:</strong>
+  <pre style="background:var(--bg-primary);color:var(--accent);padding:8px 10px;border-radius:var(--radius-sm);font-size:11px;margin:8px 0">Header          &#x2190; &#x65E2;&#x5B58;&#xFF08;&#x30DE;&#x30A4;&#x30AF;&#x884C;&#x8FFD;&#x52A0;&#x306E;&#x307F;&#xFF09;
+&#x251C;&#x2500; main-tabbar   &#x2190; &#x65B0;&#x898F;: [&#x1F3B5; &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;] [&#x1F3A4; &#x30DC;&#x30A4;&#x30B9;&#x30C1;&#x30A7;&#x30F3;&#x30B8;&#x30E3;&#x30FC;]
+&#x2514;&#x2500; &#x30B5;&#x30A6;&#x30F3;&#x30C9;&#x30DC;&#x30FC;&#x30C9;&#x9078;&#x629E;&#x6642;:
+    &#x251C;&#x2500; tabbar (preset)  &#x2190; &#x65E2;&#x5B58;&#xFF0C;&#x5909;&#x66F4;&#x306A;&#x3057;
+    &#x2514;&#x2500; Mp3List          &#x2190; &#x65E2;&#x5B58;&#xFF0C;&#x5909;&#x66F4;&#x306A;&#x3057;
+    VC&#x9078;&#x629E;&#x6642;:
+    &#x2514;&#x2500; VoiceChangerTab  &#x2190; &#x65B0;&#x898F;</pre>
+  <p>&#x2460; &#x65E2;&#x5B58;UI&#xFF08;&#x30D7;&#x30EA;&#x30BB;&#x30C3;&#x30C8;&#x30BF;&#x30D6;&#x30FBMp3&#x30EA;&#x30B9;&#x30C8;&#xFF09;&#x306F;&#x5B9F;&#x88C5;&#x6642;&#x306B;&#x5909;&#x66F4;&#x306A;&#x3057;&#x3002;</p>
+  <p>&#x2461; main-tabbar &#x306F; App.tsx &#x5185;&#x306B;&#x30A4;&#x30F3;&#x30E9;&#x30A4;&#x30F3;&#x30C7;&#x30D5;&#x30A3;&#x30CB;&#x30B7;&#x30E7;&#x30F3;&#x3067;&#x8FFD;&#x52A0;&#x3002;</p>
+  <p>&#x2462; VC&#x30BF;&#x30D6;&#x9078;&#x629E;&#x6642;&#x306F;tabbar&#x304A;&#x3088;&#x3073;Mp3List&#x3092;&#x30EC;&#x30F3;&#x30C0;&#x30EA;&#x30F3;&#x30B0;&#x3057;&#x306A;&#x3044;&#x3002;</p>
+</div>
+
+</div>
+</body>
+</html>

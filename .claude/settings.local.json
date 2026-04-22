@@ -24,7 +24,8 @@
       "Read(//c/Users/exia0/.claude/plans/**)",
       "Bash(python3 -c ' *)",
       "PowerShell(node --version 2>&1)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; node node_modules/typescript/bin/tsc --noEmit 2>&1 | Select-Object -First 40)"
     ]
   }
 }
