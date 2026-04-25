@@ -116,6 +116,9 @@ class ShortcutManager {
   win;
   shortcuts = /* @__PURE__ */ new Map();
   ptkKeycode = null;
+  randomPrevSpec = null;
+  randomNextSpec = null;
+  randomStopSpec = null;
   constructor(win) {
     this.win = win;
     uiohookNapi.uIOhook.on("keydown", (e) => {
@@ -130,6 +133,10 @@ class ShortcutManager {
       if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
         this.win.webContents.send("ptk:keydown");
       }
+      const matchSpec = (spec) => spec !== null && e.keycode === spec.keycode && !!e.ctrlKey === spec.ctrl && !!e.altKey === spec.alt && !!e.shiftKey === spec.shift;
+      if (matchSpec(this.randomPrevSpec)) this.win.webContents.send("random:prev");
+      if (matchSpec(this.randomNextSpec)) this.win.webContents.send("random:next");
+      if (matchSpec(this.randomStopSpec)) this.win.webContents.send("random:stop");
     });
     uiohookNapi.uIOhook.on("keyup", (e) => {
       if (this.win.isDestroyed() || this.win.isFocused()) return;
@@ -142,6 +149,12 @@ class ShortcutManager {
   setPtkKey(accelerator) {
     const spec = acceleratorToSpec(accelerator);
     this.ptkKeycode = spec ? spec.keycode : null;
+  }
+  setRandomKey(action, accelerator) {
+    const spec = acceleratorToSpec(accelerator);
+    if (action === "prev") this.randomPrevSpec = spec;
+    else if (action === "next") this.randomNextSpec = spec;
+    else this.randomStopSpec = spec;
   }
   syncKeybinds(keybindMap) {
     this.shortcuts.clear();
@@ -184,7 +197,11 @@ const DEFAULT_SETTINGS = {
   micDistortionMix: 80,
   micDistortionTone: 70,
   micPushToKey: false,
-  micPushToKeyBind: ""
+  micPushToKeyBind: "",
+  randomPrevBind: "",
+  randomNextBind: "",
+  randomStopBind: "",
+  keybindEnabled: true
 };
 const GLOBAL_PRESET_ID = "global";
 function getDataFile() {
@@ -256,6 +273,7 @@ function createWindow() {
   return win;
 }
 electron.app.whenReady().then(() => {
+  electron.Menu.setApplicationMenu(null);
   createWindow();
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -278,6 +296,15 @@ electron.ipcMain.handle("shortcut:unregister", (_e, key) => {
 });
 electron.ipcMain.handle("ptk:setKey", (_e, accelerator) => {
   shortcutManager?.setPtkKey(accelerator);
+});
+electron.ipcMain.handle("random:setPrevKey", (_e, acc) => {
+  shortcutManager?.setRandomKey("prev", acc);
+});
+electron.ipcMain.handle("random:setNextKey", (_e, acc) => {
+  shortcutManager?.setRandomKey("next", acc);
+});
+electron.ipcMain.handle("random:setStopKey", (_e, acc) => {
+  shortcutManager?.setRandomKey("stop", acc);
 });
 electron.ipcMain.handle("file:readBuffer", (_e, filePath) => {
   return fs.readFileSync(filePath);

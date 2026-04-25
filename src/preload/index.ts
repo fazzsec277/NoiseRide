@@ -67,6 +67,26 @@ const api = {
     setKey: (accelerator: string): Promise<void> =>
       ipcRenderer.invoke('ptk:setKey', accelerator)
   },
+  random: {
+    setPrevKey: (acc: string): Promise<void> => ipcRenderer.invoke('random:setPrevKey', acc),
+    setNextKey: (acc: string): Promise<void> => ipcRenderer.invoke('random:setNextKey', acc),
+    setStopKey: (acc: string): Promise<void> => ipcRenderer.invoke('random:setStopKey', acc),
+    onPrev: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('random:prev', h)
+      return () => ipcRenderer.off('random:prev', h)
+    },
+    onNext: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('random:next', h)
+      return () => ipcRenderer.off('random:next', h)
+    },
+    onStop: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('random:stop', h)
+      return () => ipcRenderer.off('random:stop', h)
+    }
+  },
   dialog: {
     openMp3: (): Promise<string[]> => ipcRenderer.invoke('dialog:openMp3')
   },

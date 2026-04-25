@@ -83,6 +83,9 @@ export class ShortcutManager {
   private win: BrowserWindow
   private shortcuts = new Map<string, string[]>()
   private ptkKeycode: number | null = null
+  private randomPrevSpec: KeySpec | null = null
+  private randomNextSpec: KeySpec | null = null
+  private randomStopSpec: KeySpec | null = null
 
   constructor(win: BrowserWindow) {
     this.win = win
@@ -108,6 +111,17 @@ export class ShortcutManager {
       if (this.ptkKeycode !== null && e.keycode === this.ptkKeycode) {
         this.win.webContents.send('ptk:keydown')
       }
+
+      const matchSpec = (spec: KeySpec | null): boolean =>
+        spec !== null &&
+        e.keycode === spec.keycode &&
+        !!e.ctrlKey === spec.ctrl &&
+        !!e.altKey === spec.alt &&
+        !!e.shiftKey === spec.shift
+
+      if (matchSpec(this.randomPrevSpec)) this.win.webContents.send('random:prev')
+      if (matchSpec(this.randomNextSpec)) this.win.webContents.send('random:next')
+      if (matchSpec(this.randomStopSpec)) this.win.webContents.send('random:stop')
     })
 
     uIOhook.on('keyup', (e) => {
@@ -123,6 +137,13 @@ export class ShortcutManager {
   setPtkKey(accelerator: string): void {
     const spec = acceleratorToSpec(accelerator)
     this.ptkKeycode = spec ? spec.keycode : null
+  }
+
+  setRandomKey(action: 'prev' | 'next' | 'stop', accelerator: string): void {
+    const spec = acceleratorToSpec(accelerator)
+    if (action === 'prev') this.randomPrevSpec = spec
+    else if (action === 'next') this.randomNextSpec = spec
+    else this.randomStopSpec = spec
   }
 
   syncKeybinds(keybindMap: Record<string, string[]>): void {

@@ -29,6 +29,14 @@ interface Api {
     onKeyUp: (cb: () => void) => () => void
     setKey: (accelerator: string) => Promise<void>
   }
+  random: {
+    setPrevKey: (acc: string) => Promise<void>
+    setNextKey: (acc: string) => Promise<void>
+    setStopKey: (acc: string) => Promise<void>
+    onPrev: (cb: () => void) => () => void
+    onNext: (cb: () => void) => () => void
+    onStop: (cb: () => void) => () => void
+  }
   dialog: {
     openMp3: () => Promise<string[]>
   }

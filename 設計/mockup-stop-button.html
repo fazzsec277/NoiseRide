@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>NoiseRide - 停止ボタン スタイルモック</title>
+<style>
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-hover: #1e2a45;
+    --border: rgba(255,255,255,0.08);
+    --text-primary: #e0e0f0;
+    --text-secondary: #a0a0c0;
+    --text-muted: #6060a0;
+    --accent: #7c4dff;
+    --accent-light: rgba(124,77,255,0.15);
+    --random-color: #fb923c;
+    --random-bg: rgba(251,146,60,0.12);
+    --danger: #ff5252;
+    --radius-sm: 4px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 32px;
+    max-width: 960px;
+  }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+  }
+  .note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    padding-left: 4px;
+    line-height: 1.7;
+  }
+  .section { margin-bottom: 48px; }
+  .state-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding-left: 2px;
+  }
+  .tabbar-wrap { margin-bottom: 10px; }
+
+  /* ── TabBar base ── */
+  .tabbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .tab-area { display: flex; align-items: center; gap: 4px; }
+  .tab {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+  }
+  .tab.active { color: var(--accent); background: var(--accent-light); border-color: rgba(124,77,255,0.3); }
+  .add-tab {
+    background: none; border: 1px dashed var(--border);
+    color: var(--text-muted); font-size: 14px; padding: 1px 7px;
+    border-radius: var(--radius-sm);
+  }
+  .actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  /* ── ピルグループ（固定） ── */
+  .pill { display: flex; align-items: stretch; border-radius: 20px; overflow: hidden; height: 30px; border: 1px solid rgba(251,146,60,0.4); background: var(--random-bg); }
+  .pill-skip { background: none; border: none; color: var(--random-color); font-size: 15px; font-weight: 700; padding: 0 10px; cursor: pointer; display: flex; align-items: center; }
+  .pill-skip:hover { background: rgba(251,146,60,0.15); }
+  .pill-skip.dis { opacity: 0.3; cursor: default; }
+  .pill-skip.dis:hover { background: none; }
+  .pill-div { width: 1px; background: rgba(251,146,60,0.25); align-self: stretch; }
+  .pill-rand { background: none; border: none; color: var(--random-color); font-size: 12px; font-weight: 600; padding: 0 14px; cursor: pointer; white-space: nowrap; width: 110px; display: flex; align-items: center; justify-content: center; }
+
+  /* ── 追加ボタン（固定） ── */
+  .add-btn { padding: 5px 12px; border-radius: var(--radius-sm); background: var(--accent); color: white; font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
+
+  /* ════════════════════════════════
+     案A: outline（枠のみ・bg なし）
+     ════════════════════════════════ */
+  .stop-a {
+    padding: 5px 11px;
+    border-radius: var(--radius-sm);
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .stop-a:hover { background: var(--bg-hover); color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+
+  /* ════════════════════════════════
+     案B-1: bg-tertiary（タブ同系統）
+     ════════════════════════════════ */
+  .stop-b1 {
+    padding: 5px 11px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .stop-b1:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* ════════════════════════════════
+     案B-2: レッド系（停止・危険感）
+     ════════════════════════════════ */
+  .stop-b2 {
+    padding: 5px 11px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 82, 82, 0.1);
+    border: 1px solid rgba(255, 82, 82, 0.3);
+    color: #ff8080;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .stop-b2:hover { background: rgba(255, 82, 82, 0.18); color: #ffaaaa; }
+
+  /* ════════════════════════════════
+     案B-3: ティール（中立・青緑）
+     ════════════════════════════════ */
+  .stop-b3 {
+    padding: 5px 11px;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 180, 216, 0.1);
+    border: 1px solid rgba(0, 180, 216, 0.3);
+    color: #00b4d8;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .stop-b3:hover { background: rgba(0, 180, 216, 0.18); color: #48cae4; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════
+     案A: outline（枠のみ）
+     ══════════════════════════════ -->
+<div class="section">
+  <h2>案A：outline（枠のみ・背景なし）</h2>
+  <p class="note">
+    ボーダーのみ。背景なし。テキスト色はグレー。<br>
+    + 追加（紫）・ランダムON（オレンジ）より控えめで、TabBar全体の重さが均一に保たれる。
+  </p>
+  <div class="tabbar-wrap">
+    <div class="tabbar">
+      <div class="tab-area">
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <button class="add-tab">+</button>
+      </div>
+      <div class="actions">
+        <div class="pill">
+          <button class="pill-skip dis">«</button>
+          <div class="pill-div"></div>
+          <button class="pill-rand">⇄ 全体</button>
+          <div class="pill-div"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-a">全停止 ■</button>
+        <button class="add-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     案B-1: bg-tertiary（暗い背景）
+     ══════════════════════════════ -->
+<div class="section">
+  <h2>案B-1：bg-tertiary（タブボタンと同系統）</h2>
+  <p class="note">
+    タブボタンと同じ暗い背景色（#0f3460）＋ボーダー。<br>
+    タブ群と同じ重さ感で、統一感がある。
+  </p>
+  <div class="tabbar-wrap">
+    <div class="tabbar">
+      <div class="tab-area">
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <button class="add-tab">+</button>
+      </div>
+      <div class="actions">
+        <div class="pill">
+          <button class="pill-skip dis">«</button>
+          <div class="pill-div"></div>
+          <button class="pill-rand">⇄ 全体</button>
+          <div class="pill-div"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-b1">全停止 ■</button>
+        <button class="add-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     案B-2: レッド系
+     ══════════════════════════════ -->
+<div class="section">
+  <h2>案B-2：レッド系（停止・注意感）</h2>
+  <p class="note">
+    薄い赤背景＋赤ボーダー。「停止」という操作の意味を色で伝える。<br>
+    紫・オレンジと色相が異なるため被らない。ただし他ボタンより目立つ。
+  </p>
+  <div class="tabbar-wrap">
+    <div class="tabbar">
+      <div class="tab-area">
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <button class="add-tab">+</button>
+      </div>
+      <div class="actions">
+        <div class="pill">
+          <button class="pill-skip dis">«</button>
+          <div class="pill-div"></div>
+          <button class="pill-rand">⇄ 全体</button>
+          <div class="pill-div"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-b2">全停止 ■</button>
+        <button class="add-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     案B-3: ティール（青緑）
+     ══════════════════════════════ -->
+<div class="section">
+  <h2>案B-3：ティール（青緑・中立）</h2>
+  <p class="note">
+    薄い青緑背景＋ティールボーダー。紫・オレンジ・赤とも色が被らない。<br>
+    「停止」という破壊的な意味は薄れるが、目立ちすぎず存在感がある。
+  </p>
+  <div class="tabbar-wrap">
+    <div class="tabbar">
+      <div class="tab-area">
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <button class="add-tab">+</button>
+      </div>
+      <div class="actions">
+        <div class="pill">
+          <button class="pill-skip dis">«</button>
+          <div class="pill-div"></div>
+          <button class="pill-rand">⇄ 全体</button>
+          <div class="pill-div"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-b3">全停止 ■</button>
+        <button class="add-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

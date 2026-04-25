@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Settings } from '@shared/types'
 import { useMp3Store } from '../../stores/mp3Store'
 import { audioManager } from '../../managers/AudioManager'
 import styles from './SettingsModal.module.css'
+
+function buildAccelerator(e: KeyboardEvent): string {
+  const parts: string[] = []
+  if (e.ctrlKey) parts.push('Ctrl')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  parts.push(e.key === ' ' ? 'Space' : e.key)
+  return parts.join('+')
+}
+
+type RecordTarget = 'prev' | 'next' | 'stop' | null
 
 interface Props {
   settings: Settings
@@ -15,6 +26,28 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
   const clearAllPresets = useMp3Store((s) => s.clearAllPresets)
   const [confirmClearMp3s, setConfirmClearMp3s] = useState(false)
   const [confirmClearPresets, setConfirmClearPresets] = useState(false)
+  const [recording, setRecording] = useState<RecordTarget>(null)
+
+  useEffect(() => {
+    if (!recording) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      e.preventDefault()
+      const acc = buildAccelerator(e)
+      if (recording === 'prev') {
+        onUpdate({ randomPrevBind: acc })
+        window.api.random.setPrevKey(acc).catch(() => {})
+      } else if (recording === 'next') {
+        onUpdate({ randomNextBind: acc })
+        window.api.random.setNextKey(acc).catch(() => {})
+      } else {
+        onUpdate({ randomStopBind: acc })
+        window.api.random.setStopKey(acc).catch(() => {})
+      }
+      setRecording(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [recording, onUpdate])
 
   const handleClearAllMp3s = (): void => {
     audioManager.stopAll()
@@ -25,6 +58,18 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
   const handleClearAllPresets = (): void => {
     clearAllPresets()
     setConfirmClearPresets(false)
+  }
+
+  const bindRows: { key: RecordTarget; label: string; value: string }[] = [
+    { key: 'prev', label: '前の曲', value: settings.randomPrevBind },
+    { key: 'next', label: '次の曲', value: settings.randomNextBind },
+    { key: 'stop', label: '全停止', value: settings.randomStopBind },
+  ]
+
+  const clearBind = (target: RecordTarget): void => {
+    if (target === 'prev') onUpdate({ randomPrevBind: '' })
+    else if (target === 'next') onUpdate({ randomNextBind: '' })
+    else if (target === 'stop') onUpdate({ randomStopBind: '' })
   }
 
   return (
@@ -67,6 +112,29 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
                 ○ ライト
               </button>
             </div>
+          </div>
+
+          <div className={styles.shortcutSection}>
+            <div className={styles.shortcutLabel}>ランダム再生ショートカット</div>
+            {bindRows.map(({ key, label, value }) => (
+              <div key={key} className={styles.shortcutRow}>
+                <span className={styles.shortcutName}>{label}</span>
+                <div className={styles.keyGroup}>
+                  {value && (
+                    <>
+                      <span className={styles.keyBadge}>{value}</span>
+                      <button className={styles.clearBtn} onClick={() => clearBind(key)} title="クリア">×</button>
+                    </>
+                  )}
+                  <button
+                    className={`${styles.recordBtn} ${recording === key ? styles.recordBtnActive : ''}`}
+                    onClick={() => setRecording((r) => (r === key ? null : key))}
+                  >
+                    {recording === key ? 'キー入力待ち...' : value ? '変更' : 'キーを記録'}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className={styles.dangerZone}>

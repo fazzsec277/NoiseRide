@@ -49,6 +49,26 @@ const api = {
     },
     setKey: (accelerator) => electron.ipcRenderer.invoke("ptk:setKey", accelerator)
   },
+  random: {
+    setPrevKey: (acc) => electron.ipcRenderer.invoke("random:setPrevKey", acc),
+    setNextKey: (acc) => electron.ipcRenderer.invoke("random:setNextKey", acc),
+    setStopKey: (acc) => electron.ipcRenderer.invoke("random:setStopKey", acc),
+    onPrev: (cb) => {
+      const h = () => cb();
+      electron.ipcRenderer.on("random:prev", h);
+      return () => electron.ipcRenderer.off("random:prev", h);
+    },
+    onNext: (cb) => {
+      const h = () => cb();
+      electron.ipcRenderer.on("random:next", h);
+      return () => electron.ipcRenderer.off("random:next", h);
+    },
+    onStop: (cb) => {
+      const h = () => cb();
+      electron.ipcRenderer.on("random:stop", h);
+      return () => electron.ipcRenderer.off("random:stop", h);
+    }
+  },
   dialog: {
     openMp3: () => electron.ipcRenderer.invoke("dialog:openMp3")
   },

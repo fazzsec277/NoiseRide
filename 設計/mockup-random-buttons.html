@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>NoiseRide - ランダムボタン グループ化 UIモック</title>
+<style>
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-hover: #1e2a45;
+    --border: rgba(255,255,255,0.08);
+    --text-primary: #e0e0f0;
+    --text-secondary: #a0a0c0;
+    --text-muted: #6060a0;
+    --accent: #7c4dff;
+    --accent-light: rgba(124,77,255,0.15);
+    --random-color: #fb923c;
+    --random-bg: rgba(251,146,60,0.12);
+    --radius-sm: 4px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 32px;
+    max-width: 960px;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+  }
+  .note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    padding-left: 4px;
+    line-height: 1.7;
+  }
+  .section { margin-bottom: 52px; }
+
+  /* ========== TABBAR BASE ========== */
+  .tabbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0 6px;
+    gap: 6px;
+  }
+
+  .tab-area {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .tab {
+    padding: 5px 14px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .tab.active {
+    color: var(--accent);
+    background: var(--accent-light);
+    border-color: rgba(124,77,255,0.3);
+  }
+  .tab:not(.active):hover {
+    background: var(--bg-hover);
+  }
+
+  .arrow-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 5px;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+  }
+  .arrow-btn:hover { background: var(--bg-hover); }
+  .arrow-btn.disabled { opacity: 0.2; cursor: default; }
+  .arrow-btn.disabled:hover { background: none; }
+
+  .add-tab {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    line-height: 1.6;
+  }
+  .add-tab:hover { border-color: var(--accent); color: var(--accent); }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* Add file button (common) */
+  .add-file-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .add-file-btn:hover { background: var(--bg-hover); }
+
+  /* Stop button (common) */
+  .stop-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 5px 9px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+  }
+  .stop-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* ========== 案A ランダムボタン (ON状態) ========== */
+  .random-btn-on {
+    background: var(--random-bg);
+    border: 1px solid rgba(251,146,60,0.35);
+    color: var(--random-color);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .random-btn-off {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .random-btn-off:hover { background: var(--bg-hover); }
+
+  /* ========== IDEA 1: ピル型カプセルグループ ========== */
+  .pill-group {
+    display: flex;
+    align-items: stretch;
+    background: var(--random-bg);
+    border: 1px solid rgba(251,146,60,0.35);
+    border-radius: 20px;
+    overflow: hidden;
+    height: 30px;
+  }
+  .pill-group .pill-skip {
+    background: none;
+    border: none;
+    color: var(--random-color);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0 10px;
+    cursor: pointer;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+  .pill-group .pill-skip:hover {
+    background: rgba(251,146,60,0.15);
+  }
+  .pill-group .pill-skip.disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .pill-group .pill-skip.disabled:hover {
+    background: none;
+  }
+  .pill-group .pill-divider {
+    width: 1px;
+    background: rgba(251,146,60,0.25);
+    align-self: stretch;
+  }
+  .pill-group .pill-random {
+    background: none;
+    border: none;
+    color: var(--random-color);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    display: flex;
+    align-items: center;
+  }
+  /* OFF state pill */
+  .pill-group-off {
+    display: flex;
+    align-items: stretch;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    height: 30px;
+  }
+  .pill-group-off .pill-skip {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0 10px;
+    cursor: default;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    opacity: 0.3;
+  }
+  .pill-group-off .pill-divider {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+  }
+  .pill-group-off .pill-random {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+  }
+  .pill-group-off .pill-random:hover {
+    color: var(--text-primary);
+  }
+
+  /* ========== IDEA 2: 連結ボタングループ ========== */
+  .btn-group {
+    display: flex;
+    align-items: stretch;
+    height: 30px;
+  }
+  .btn-group .bg-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    line-height: 1;
+    margin-left: -1px;
+  }
+  .btn-group .bg-btn:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    margin-left: 0;
+  }
+  .btn-group .bg-btn:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .btn-group .bg-btn:hover {
+    background: var(--bg-hover);
+    z-index: 1;
+  }
+  .btn-group .bg-btn.active-random {
+    background: var(--random-bg);
+    border-color: rgba(251,146,60,0.35);
+    color: var(--random-color);
+    z-index: 1;
+  }
+  .btn-group .bg-btn.disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .btn-group .bg-btn.disabled:hover {
+    background: none;
+  }
+  .btn-group .bg-random-text {
+    font-size: 12px;
+    padding: 0 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+  }
+
+  /* ========== IDEA 3: 挟む・フラット ========== */
+  .flat-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .flat-skip {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 5px 7px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+  }
+  .flat-skip:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .flat-skip.disabled { opacity: 0.3; cursor: default; }
+  .flat-skip.disabled:hover { background: none; color: var(--text-secondary); }
+  .flat-skip.random-active { color: var(--random-color); }
+  .flat-skip.random-active:hover { background: rgba(251,146,60,0.1); }
+
+  .flat-gap { width: 2px; }
+  .flat-gap-lg { width: 8px; }
+
+
+  /* ========== STATE LABELS ========== */
+  .state-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding-left: 2px;
+  }
+  .tabbar-wrap {
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========================================================
+     アイデア 1: ピル型カプセルグループ
+     ======================================================== -->
+<div class="section">
+  <h2>アイデア①　ピル型カプセルグループ</h2>
+  <p class="note">
+    ランダム・前・次の3ボタンを1つの楕円形コンテナで囲む。<br>
+    ランダムON時はオレンジ色のカプセルになり、セット感が明確。ランダムOFF時は境界線のみ。
+  </p>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムOFF（⏭⏮ は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="pill-group-off">
+          <button class="pill-skip" style="cursor:default">«</button>
+          <div class="pill-divider"></div>
+          <button class="pill-random">⇄ ランダム</button>
+          <div class="pill-divider"></div>
+          <button class="pill-skip" style="cursor:default">»</button>
+        </div>
+        <button class="stop-btn">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴なし（« は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="pill-group">
+          <button class="pill-skip disabled">«</button>
+          <div class="pill-divider"></div>
+          <button class="pill-random">⇄ 全体</button>
+          <div class="pill-divider"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴あり（全ボタン active）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="pill-group">
+          <button class="pill-skip">«</button>
+          <div class="pill-divider"></div>
+          <button class="pill-random">⇄ 全体</button>
+          <div class="pill-divider"></div>
+          <button class="pill-skip">»</button>
+        </div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ========================================================
+     アイデア 2: 連結ボタングループ（境界線共有）
+     ======================================================== -->
+<div class="section">
+  <h2>アイデア②　連結ボタングループ（境界線共有）</h2>
+  <p class="note">
+    3つのボタンが隣接してひとつの区画として見える。ランダムON時は中央ボタンのみオレンジに変化。<br>
+    ツールバーでよく見られる形で、「これらはひとつの操作グループ」と伝わりやすい。
+  </p>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムOFF（« » は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="btn-group">
+          <button class="bg-btn disabled" style="font-size:14px">«</button>
+          <button class="bg-btn bg-random-text">⇄ ランダム</button>
+          <button class="bg-btn disabled" style="font-size:14px">»</button>
+        </div>
+        <button class="stop-btn">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴なし（« は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="btn-group">
+          <button class="bg-btn disabled" style="font-size:14px">«</button>
+          <button class="bg-btn bg-random-text active-random">⇄ 全体</button>
+          <button class="bg-btn" style="font-size:14px">»</button>
+        </div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴あり（全ボタン active）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="btn-group">
+          <button class="bg-btn" style="font-size:14px;color:var(--random-color)">«</button>
+          <button class="bg-btn bg-random-text active-random">⇄ 全体</button>
+          <button class="bg-btn" style="font-size:14px;color:var(--random-color)">»</button>
+        </div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ========================================================
+     アイデア 3: 挟む・フラット（隣接スペースで表現）
+     ======================================================== -->
+<div class="section">
+  <h2>アイデア③　挟む・フラット</h2>
+  <p class="note">
+    « と » がランダムボタンを左右から挟む配置。ボーダーや囲みなし。<br>
+    3ボタン間のスペースを狭く、◼ との間を広くすることでセット感を演出。TabBarの高さも変わらない。
+  </p>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムOFF（« » は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="flat-group">
+          <button class="flat-skip disabled">«</button>
+          <button class="random-btn-off">⇄ ランダム</button>
+          <button class="flat-skip disabled">»</button>
+        </div>
+        <div class="flat-gap-lg"></div>
+        <button class="stop-btn">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴なし（« は disabled）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="flat-group">
+          <button class="flat-skip random-active disabled">«</button>
+          <button class="random-btn-on">⇄ 全体</button>
+          <button class="flat-skip random-active">»</button>
+        </div>
+        <div class="flat-gap-lg"></div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar-wrap">
+    <p class="state-label">ランダムON・履歴あり（全ボタン active）</p>
+    <div class="tabbar">
+      <div class="tab-area">
+        <button class="arrow-btn disabled">‹</button>
+        <div class="tab active">全体</div>
+        <div class="tab">プリセット1</div>
+        <div class="tab">プリセット2</div>
+        <button class="add-tab">+</button>
+        <button class="arrow-btn disabled">›</button>
+      </div>
+      <div class="actions">
+        <div class="flat-group">
+          <button class="flat-skip random-active">«</button>
+          <button class="random-btn-on">⇄ 全体</button>
+          <button class="flat-skip random-active">»</button>
+        </div>
+        <div class="flat-gap-lg"></div>
+        <button class="stop-btn" style="color:var(--random-color)">◼</button>
+        <button class="add-file-btn">+ 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

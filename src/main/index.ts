@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { ShortcutManager } from './ShortcutManager'
@@ -53,6 +53,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null)
   createWindow()
 
   app.on('activate', () => {
@@ -86,6 +87,17 @@ ipcMain.handle('shortcut:unregister', (_e, key: string): void => {
 // ── PTK IPC ──────────────────────────────────────────────────
 ipcMain.handle('ptk:setKey', (_e, accelerator: string): void => {
   shortcutManager?.setPtkKey(accelerator)
+})
+
+// ── Random controls IPC ──────────────────────────────────────
+ipcMain.handle('random:setPrevKey', (_e, acc: string): void => {
+  shortcutManager?.setRandomKey('prev', acc)
+})
+ipcMain.handle('random:setNextKey', (_e, acc: string): void => {
+  shortcutManager?.setRandomKey('next', acc)
+})
+ipcMain.handle('random:setStopKey', (_e, acc: string): void => {
+  shortcutManager?.setRandomKey('stop', acc)
 })
 
 // ── File Buffer IPC ──────────────────────────────────────────

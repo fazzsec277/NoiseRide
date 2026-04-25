@@ -5,7 +5,7 @@ import { randomQueueManager } from '../managers/RandomQueueManager'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useRandomStore } from '../stores/randomStore'
 
-function playNextRandom(): void {
+export function playNextRandom(): void {
   const nextId = randomQueueManager.getNext()
   if (!nextId) {
     randomQueueManager.clearCurrentPlaying()
@@ -44,6 +44,7 @@ export function useAudioEnded(): void {
       if (!randomQueueManager.active) return
       if (!randomQueueManager.isCurrentRandom(id)) return
 
+      randomQueueManager.clearFutureQueue()
       playNextRandom()
     })
     return off

@@ -4,6 +4,7 @@ import { randomQueueManager } from '../../managers/RandomQueueManager'
 import { audioManager } from '../../managers/AudioManager'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useRandomStore } from '../../stores/randomStore'
+import { useRandomControls } from '../../hooks/useRandomControls'
 import { GLOBAL_PRESET_ID } from '@shared/types'
 import styles from './TabBar.module.css'
 
@@ -19,16 +20,12 @@ export function TabBar(): JSX.Element {
   const addMp3s = useMp3Store((s) => s.addMp3s)
   const setDuration = useMp3Store((s) => s.setDuration)
   const settings = useSettingsStore((s) => s.settings)
+  const updateSettings = useSettingsStore((s) => s.updateSettings)
   const setPlaying = useMp3Store((s) => s.setPlaying)
 
-  const [isRandom, setIsRandom] = useState(() => randomQueueManager.active)
-  const [randomPresetName, setRandomPresetName] = useState(() => {
-    if (!randomQueueManager.active) return ''
-    const presetId = randomQueueManager.currentPresetId
-    const { presets: p } = useMp3Store.getState()
-    const preset = p.find((pr) => pr.id === presetId)
-    return preset?.name ?? '全体'
-  })
+  const { playPrev, playNext, stopAll } = useRandomControls()
+  const isRandom = useRandomStore((s) => s.isRandomActive)
+  const randomPresetName = useRandomStore((s) => s.randomPresetName)
   const [editingPreset, setEditingPreset] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const editRef = useRef<HTMLInputElement>(null)
@@ -95,12 +92,11 @@ export function TabBar(): JSX.Element {
       const idToStop = randomQueueManager.getCurrentPlayingId()
       randomQueueManager.stop()
       useRandomStore.getState().setCurrentRandomPlayingId(null)
+      useRandomStore.getState().setRandomActive(false)
       if (idToStop) {
         audioManager.stop(idToStop)
         setPlaying(idToStop, false)
       }
-      setIsRandom(false)
-      setRandomPresetName('')
     } else {
       const activePreset = presets.find((p) => p.id === activePresetId)
       const allIds =
@@ -109,9 +105,9 @@ export function TabBar(): JSX.Element {
           : activePreset?.mp3Ids ?? []
       const ids = allIds.filter((id) => !mp3s.find((m) => m.id === id)?.loop)
       if (ids.length === 0) return
+      const presetName = activePreset?.name ?? '全体'
       randomQueueManager.start(activePresetId, ids)
-      setIsRandom(true)
-      setRandomPresetName(activePreset?.name ?? '全体')
+      useRandomStore.getState().setRandomActive(true, presetName)
 
       const nextId = randomQueueManager.getNext()
       if (!nextId) return
@@ -228,12 +224,36 @@ export function TabBar(): JSX.Element {
       </div>
 
       <div className={styles.actions}>
+        <div className={`${styles.pillGroup} ${isRandom ? styles.pillOn : ''}`}>
+          <button
+            className={styles.pillSkip}
+            onClick={playPrev}
+            disabled={!isRandom || !randomQueueManager.hasPrevious()}
+            title="前の曲"
+          >«</button>
+          <div className={styles.pillDivider} />
+          <button
+            className={styles.pillRandom}
+            onClick={toggleRandom}
+            title="ランダム再生"
+          >
+            {isRandom ? `⇄ ${randomPresetName}` : '⇄ ランダム'}
+          </button>
+          <div className={styles.pillDivider} />
+          <button
+            className={styles.pillSkip}
+            onClick={playNext}
+            disabled={!isRandom}
+            title="次の曲"
+          >»</button>
+        </div>
+        <button className={styles.stopBtn} onClick={stopAll} title="全停止">全停止 ■</button>
         <button
-          className={`${styles.randomBtn} ${isRandom ? styles.randomOn : ''}`}
-          onClick={toggleRandom}
-          title="ランダム再生"
+          className={`${styles.kbToggleBtn} ${!settings.keybindEnabled ? styles.kbToggleOff : ''}`}
+          onClick={() => updateSettings({ keybindEnabled: !settings.keybindEnabled })}
+          title={settings.keybindEnabled ? 'キーバインド有効（クリックで無効化）' : 'キーバインド無効（クリックで有効化）'}
         >
-          {isRandom ? `⇄ ${randomPresetName}` : '⇄ ランダム'}
+          {settings.keybindEnabled ? 'KB: ON' : 'KB: OFF'}
         </button>
         <button className={styles.addFileBtn} onClick={handleAddFiles} title="ファイル追加">
           + 追加

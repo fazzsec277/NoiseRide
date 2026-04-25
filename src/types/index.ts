@@ -35,6 +35,10 @@ export interface Settings {
   micDistortionTone: number
   micPushToKey: boolean
   micPushToKeyBind: string
+  randomPrevBind: string
+  randomNextBind: string
+  randomStopBind: string
+  keybindEnabled: boolean
 }
 
 export interface AppData {
@@ -62,7 +66,11 @@ export const DEFAULT_SETTINGS: Settings = {
   micDistortionMix: 80,
   micDistortionTone: 70,
   micPushToKey: false,
-  micPushToKeyBind: ''
+  micPushToKeyBind: '',
+  randomPrevBind: '',
+  randomNextBind: '',
+  randomStopBind: '',
+  keybindEnabled: true
 }
 
 export const GLOBAL_PRESET_ID = 'global'
