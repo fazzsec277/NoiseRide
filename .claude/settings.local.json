@@ -26,7 +26,21 @@
       "PowerShell(node --version 2>&1)",
       "Bash(npx tsc *)",
       "PowerShell($env:PATH += \";C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; node node_modules/typescript/bin/tsc --noEmit 2>&1 | Select-Object -First 40)",
-      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; node node_modules/typescript/bin/tsc --noEmit 2>&1)"
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\"; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; node node_modules/typescript/bin/tsc --noEmit 2>&1)",
+      "Bash(python -c ' *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"$env:APPDATA\\\\npm\" -ErrorAction SilentlyContinue | Select-Object Name -First 5)",
+      "PowerShell($env:PATH)",
+      "Read(//c/Users/exia0/scoop/**)",
+      "Read(//c/Users/exia0/**)",
+      "PowerShell(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root })",
+      "Read(//d//**)",
+      "Read(//c//**)",
+      "PowerShell(Test-Path \"C:\\\\Program Files\\\\nodejs\\\\node.exe\"; Test-Path \"C:\\\\Program Files \\(x86\\)\\\\nodejs\\\\node.exe\"; Test-Path \"$env:LOCALAPPDATA\\\\nvm\\\\nvm.exe\")",
+      "PowerShell(& \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\\\\npm.cmd\" --version 2>&1)",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; $npmPath = \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\\\\npm.cmd\"; & $npmPath run typecheck 2>&1 | Select-Object -First 60)",
+      "PowerShell($nodePath = \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; & \"$nodePath\\\\node.exe\" \"node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit -p tsconfig.json 2>&1 | Select-Object -First 60)",
+      "PowerShell($nodePath = \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\"; Set-Location \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; & \"$nodePath\\\\node.exe\" \"node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit -p tsconfig.node.json 2>&1 | Select-Object -First 40)",
+      "PowerShell($nodePath = \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\"; Set-Location \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; & \"$nodePath\\\\node.exe\" \"node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit -p tsconfig.json 2>&1)"
     ]
   }
 }

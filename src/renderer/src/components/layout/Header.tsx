@@ -17,9 +17,13 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
   const [audioOpen, setAudioOpen] = useState(false)
   const [micOpen, setMicOpen] = useState(false)
   const [masterMuted, setMasterMuted] = useState(false)
+  const [micActive, setMicActive] = useState(false)
   const premuteVolume = useRef(settings.masterVolume)
+  const preMuteMicGain = useRef(settings.micInputGain)
   const audioDropdownRef = useRef<HTMLDivElement>(null)
   const micDropdownRef = useRef<HTMLDivElement>(null)
+  const micActiveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const micRafId = useRef(0)
 
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then((all) => {
@@ -27,6 +31,34 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
     })
     micManager.enumerateDevices().then(setMicDevices)
   }, [])
+
+  useEffect(() => {
+    const THRESHOLD = 0.01
+    const HOLD_MS = 80
+    const tick = (): void => {
+      const analyser = micManager.getAnalyser()
+      if (analyser && !settings.micMuted) {
+        const data = new Uint8Array(analyser.frequencyBinCount)
+        analyser.getByteTimeDomainData(data)
+        let peak = 0
+        for (let i = 0; i < data.length; i++) {
+          const v = Math.abs(data[i] - 128) / 128
+          if (v > peak) peak = v
+        }
+        if (peak > THRESHOLD) {
+          setMicActive(true)
+          if (micActiveTimer.current) clearTimeout(micActiveTimer.current)
+          micActiveTimer.current = setTimeout(() => setMicActive(false), HOLD_MS)
+        }
+      }
+      micRafId.current = requestAnimationFrame(tick)
+    }
+    micRafId.current = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(micRafId.current)
+      if (micActiveTimer.current) clearTimeout(micActiveTimer.current)
+    }
+  }, [settings.micMuted])
 
   useEffect(() => {
     if (!audioOpen) return
@@ -76,16 +108,23 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
 
   const toggleAudioDevice = (deviceId: string): void => {
     const next = selectedIds.includes(deviceId)
-      ? selectedIds.filter((id) => id !== deviceId)
+      ? selectedIds.filter((id: string) => id !== deviceId)
       : [...selectedIds, deviceId]
     updateSettings({ outputDeviceIds: next })
     audioManager.setOutputDevices(next)
   }
 
   const handleMicMuteToggle = (): void => {
-    const next = !settings.micMuted
-    updateSettings({ micMuted: next })
-    micManager.setMuted(next)
+    if (settings.micMuted) {
+      const gain = preMuteMicGain.current
+      updateSettings({ micMuted: false, micInputGain: gain })
+      micManager.setMuted(false)
+      micManager.setGain(gain)
+    } else {
+      preMuteMicGain.current = settings.micInputGain
+      updateSettings({ micMuted: true, micInputGain: 0 })
+      micManager.setMuted(true)
+    }
   }
 
   const handleMicGainChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -122,7 +161,11 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
         <div className={styles.deviceControls}>
           {/* Row 1: Mic */}
           <span
-            className={`${styles.micIcon} ${settings.micMuted ? styles.micIconMuted : ''}`}
+            className={[
+              styles.micIconWrapper,
+              settings.micMuted ? styles.micIconMuted : '',
+              micActive ? styles.micIconActive : '',
+            ].join(' ')}
             onClick={handleMicMuteToggle}
             title={settings.micMuted ? 'マイクミュート解除' : 'マイクミュート'}
           >

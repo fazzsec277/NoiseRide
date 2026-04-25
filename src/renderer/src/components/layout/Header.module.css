@@ -120,17 +120,36 @@
   align-items: center;
 }
 
-.micIcon {
+.micIconWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
   text-align: center;
-  transition: filter 0.15s;
 }
 
 .micIconMuted {
-  filter: brightness(0.6) sepia(1) saturate(5) hue-rotate(310deg);
+  opacity: 0.6;
+}
+
+.micIconActive {
+  color: var(--random-color);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--random-color) 60%, transparent);
+}
+
+.micIconMuted::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 2px;
+  background: #e53935;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  pointer-events: none;
 }
 
 .volumeIcon {

@@ -25,6 +25,15 @@ export interface Settings {
   micInputGain: number
   micMuted: boolean
   micPitchSemitones: number
+  micFormantSemitones: number
+  micEqLow: number
+  micEqMid: number
+  micEqHigh: number
+  micCompressorEnabled: boolean
+  micDistortionEnabled: boolean
+  micDistortionDrive: number
+  micDistortionMix: number
+  micDistortionTone: number
   micPushToKey: boolean
   micPushToKeyBind: string
 }
@@ -44,6 +53,15 @@ export const DEFAULT_SETTINGS: Settings = {
   micInputGain: 1.0,
   micMuted: false,
   micPitchSemitones: 0,
+  micFormantSemitones: 0,
+  micEqLow: 0,
+  micEqMid: 0,
+  micEqHigh: 0,
+  micCompressorEnabled: false,
+  micDistortionEnabled: false,
+  micDistortionDrive: 50,
+  micDistortionMix: 80,
+  micDistortionTone: 70,
   micPushToKey: false,
   micPushToKeyBind: ''
 }

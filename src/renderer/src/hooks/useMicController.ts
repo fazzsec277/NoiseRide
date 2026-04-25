@@ -17,31 +17,86 @@ function matchesBind(e: KeyboardEvent, bind: string): boolean {
 export function useMicController(): void {
   const settings = useSettingsStore((s) => s.settings)
 
-  // アプリ起動時にマイク開始、デバイス変更時に再起動
+  // Start mic on mount / restart on device change
   useEffect(() => {
     micManager
       .start(settings.micDeviceId, settings.outputDeviceIds, settings.micInputGain)
       .then(() => {
         micManager.setPtkMuted(settings.micPushToKey)
+        micManager.setPitch(settings.micPitchSemitones)
+        micManager.setFormant(settings.micFormantSemitones)
+        micManager.setEqBand('low', settings.micEqLow)
+        micManager.setEqBand('mid', settings.micEqMid)
+        micManager.setEqBand('high', settings.micEqHigh)
+        micManager.setCompressorEnabled(settings.micCompressorEnabled)
+        micManager.setDistortionEnabled(settings.micDistortionEnabled)
+        micManager.setDistortionDrive(settings.micDistortionDrive)
+        micManager.setDistortionMix(settings.micDistortionMix)
+        micManager.setDistortionTone(settings.micDistortionTone)
       })
       .catch(() => {})
     return () => micManager.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.micDeviceId, settings.outputDeviceIds.join(',')])
 
-  // PTK ON/OFF 切り替え
+  // Pitch shift
+  useEffect(() => {
+    micManager.setPitch(settings.micPitchSemitones)
+  }, [settings.micPitchSemitones])
+
+  // Formant shift
+  useEffect(() => {
+    micManager.setFormant(settings.micFormantSemitones)
+  }, [settings.micFormantSemitones])
+
+  // EQ bands
+  useEffect(() => {
+    micManager.setEqBand('low', settings.micEqLow)
+  }, [settings.micEqLow])
+
+  useEffect(() => {
+    micManager.setEqBand('mid', settings.micEqMid)
+  }, [settings.micEqMid])
+
+  useEffect(() => {
+    micManager.setEqBand('high', settings.micEqHigh)
+  }, [settings.micEqHigh])
+
+  // Compressor
+  useEffect(() => {
+    micManager.setCompressorEnabled(settings.micCompressorEnabled)
+  }, [settings.micCompressorEnabled])
+
+  // Distortion
+  useEffect(() => {
+    micManager.setDistortionEnabled(settings.micDistortionEnabled)
+  }, [settings.micDistortionEnabled])
+
+  useEffect(() => {
+    micManager.setDistortionDrive(settings.micDistortionDrive)
+  }, [settings.micDistortionDrive])
+
+  useEffect(() => {
+    micManager.setDistortionMix(settings.micDistortionMix)
+  }, [settings.micDistortionMix])
+
+  useEffect(() => {
+    micManager.setDistortionTone(settings.micDistortionTone)
+  }, [settings.micDistortionTone])
+
+  // PTK ON/OFF
   useEffect(() => {
     micManager.setPtkMuted(settings.micPushToKey)
   }, [settings.micPushToKey])
 
-  // PTK キーを Main プロセスに登録
+  // PTK keybind → main process
   useEffect(() => {
     if (settings.micPushToKeyBind) {
       window.api.ptk.setKey(settings.micPushToKeyBind).catch(() => {})
     }
   }, [settings.micPushToKeyBind])
 
-  // PTK キー制御（フォーカス中: document events）
+  // PTK key capture (focused)
   useEffect(() => {
     if (!settings.micPushToKey || !settings.micPushToKeyBind) return
     const bind = settings.micPushToKeyBind
@@ -59,7 +114,7 @@ export function useMicController(): void {
     }
   }, [settings.micPushToKey, settings.micPushToKeyBind])
 
-  // PTK キー制御（非フォーカス時: IPC events）
+  // PTK key capture (unfocused, IPC)
   useEffect(() => {
     if (!settings.micPushToKey) return
     const offDown = window.api.ptk.onKeyDown(() => micManager.setPtkMuted(false))

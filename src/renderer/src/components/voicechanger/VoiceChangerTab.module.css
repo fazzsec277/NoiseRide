@@ -288,3 +288,10 @@
   border-color: #e53935;
   color: #e53935;
 }
+
+.compressorHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'Consolas', monospace;
+  margin-left: 8px;
+}

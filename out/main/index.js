@@ -174,6 +174,15 @@ const DEFAULT_SETTINGS = {
   micInputGain: 1,
   micMuted: false,
   micPitchSemitones: 0,
+  micFormantSemitones: 0,
+  micEqLow: 0,
+  micEqMid: 0,
+  micEqHigh: 0,
+  micCompressorEnabled: false,
+  micDistortionEnabled: false,
+  micDistortionDrive: 50,
+  micDistortionMix: 80,
+  micDistortionTone: 70,
   micPushToKey: false,
   micPushToKeyBind: ""
 };
