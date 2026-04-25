@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { audioManager } from '../../managers/AudioManager'
 import { micManager } from '../../managers/MicManager'
+import { randomQueueManager } from '../../managers/RandomQueueManager'
+import { useRandomStore } from '../../stores/randomStore'
 import styles from './Header.module.css'
 
 interface Props {
@@ -107,6 +109,11 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
   }
 
   const toggleAudioDevice = (deviceId: string): void => {
+    randomQueueManager.stop()
+    useRandomStore.getState().setCurrentRandomPlayingId(null)
+    useRandomStore.getState().setRandomActive(false)
+    audioManager.stopAll()
+
     const next = selectedIds.includes(deviceId)
       ? selectedIds.filter((id: string) => id !== deviceId)
       : [...selectedIds, deviceId]
@@ -139,14 +146,14 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
   }
 
   const getAudioLabel = (): string => {
-    if (selectedIds.length === 0) return 'システムデフォルト'
+    if (selectedIds.length === 0) return '指定なし'
     const first = audioDevices.find((d) => d.deviceId === selectedIds[0])
     const firstName = first?.label || `デバイス (${selectedIds[0].slice(0, 8)})`
     return selectedIds.length === 1 ? firstName : `⊕ ${firstName}`
   }
 
   const getMicLabel = (): string => {
-    if (!settings.micDeviceId) return 'OSデフォルト'
+    if (!settings.micDeviceId) return '指定なし'
     const dev = micDevices.find((d) => d.deviceId === settings.micDeviceId)
     return dev?.label || `マイク (${settings.micDeviceId.slice(0, 8)})`
   }
@@ -199,7 +206,7 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
                     checked={!settings.micDeviceId}
                     onChange={() => handleMicDeviceChange('')}
                   />
-                  <span className={styles.deviceItemLabel}>OSデフォルト</span>
+                  <span className={styles.deviceItemLabel}>指定なし</span>
                 </label>
                 {micDevices.map((d) => (
                   <label key={d.deviceId} className={styles.deviceItem}>

@@ -144,7 +144,7 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
         <span className={styles.volumeLabel}>{Math.round((mp3.volume ?? 1.0) * 100)}%</span>
       </div>
 
-      <div className={styles.colActions}>
+      <div className={styles.colStatus}>
         <button
           className={`${styles.loopBtn} ${mp3.loop ? styles.loopOn : ''}`}
           onClick={() => {
@@ -163,6 +163,8 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
         >
           ↩
         </button>
+      </div>
+      <div className={styles.colActions}>
         <button
           ref={menuBtnRef}
           className={styles.menuBtn}

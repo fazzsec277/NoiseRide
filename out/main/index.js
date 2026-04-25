@@ -253,6 +253,11 @@ function createWindow() {
     show: false
   });
   win.on("ready-to-show", () => win.show());
+  win.webContents.on("before-input-event", (_e, input) => {
+    if (input.type === "keyDown" && input.key === "I" && input.control && input.shift) {
+      win.webContents.toggleDevTools();
+    }
+  });
   win.webContents.on("will-navigate", (e, url) => {
     e.preventDefault();
     if (url.startsWith("file:///") && url.toLowerCase().endsWith(".mp3")) {

@@ -93,10 +93,17 @@ export default function App(): JSX.Element {
   useMicController()
 
   useEffect(() => {
-    window.api.storage.load().then((data) => {
+    window.api.storage.load().then(async (data) => {
+      const allDevices = await navigator.mediaDevices.enumerateDevices()
+      const outputIds = new Set(allDevices.filter((d) => d.kind === 'audiooutput').map((d) => d.deviceId))
+      const inputIds  = new Set(allDevices.filter((d) => d.kind === 'audioinput').map((d) => d.deviceId))
+
+      const validOutputIds = (data.settings.outputDeviceIds ?? []).filter((id) => outputIds.has(id))
+      const validMicId = inputIds.has(data.settings.micDeviceId ?? '') ? (data.settings.micDeviceId ?? '') : ''
+
       loadFromData(data)
-      loadSettings(data.settings)
-      audioManager.setOutputDevices(data.settings.outputDeviceIds ?? [])
+      loadSettings({ ...data.settings, outputDeviceIds: validOutputIds, micDeviceId: validMicId })
+      audioManager.setOutputDevices(validOutputIds)
     })
   }, [loadFromData, loadSettings])
 

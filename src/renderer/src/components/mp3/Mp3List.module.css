@@ -21,7 +21,7 @@
 
 .header {
   display: grid;
-  grid-template-columns: 24px 1fr 200px 110px 110px 130px;
+  grid-template-columns: 24px 1fr 200px 110px 110px 70px 40px;
   padding: 6px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
@@ -40,6 +40,7 @@
 .colKeys,
 .colDur,
 .colVolume,
+.colStatus,
 .colActions {
   display: flex;
   align-items: center;

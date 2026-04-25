@@ -34,13 +34,8 @@ class AudioManager {
   private async getCtxEntry(deviceId: string): Promise<CtxEntry> {
     let entry = this.ctxMap.get(deviceId)
     if (!entry || entry.ctx.state === 'closed') {
-      const ctx = new AudioContext()
-      if (deviceId) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (ctx as any).setSinkId(deviceId)
-        } catch { /* setSinkId not supported or invalid deviceId */ }
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ctx = deviceId ? new AudioContext({ sinkId: deviceId } as any) : new AudioContext()
       const masterGain = ctx.createGain()
       masterGain.gain.value = this.masterVolume
       masterGain.connect(ctx.destination)

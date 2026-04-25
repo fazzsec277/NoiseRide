@@ -26,6 +26,12 @@ function createWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => win.show())
 
+  win.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'I' && input.control && input.shift) {
+      win.webContents.toggleDevTools()
+    }
+  })
+
   // Intercept file drag & drop: Electron tries to navigate to the file:// URL.
   // We prevent navigation and instead send the file path(s) to the renderer via IPC.
   win.webContents.on('will-navigate', (e, url) => {
