@@ -1,0 +1,2 @@
+- 不明点があれば、必ずAskUserQuestionToolを使用して
+- focusモードはONにして実行して(/focus)

@@ -50,3 +50,32 @@
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
+
+.colSortable {
+  cursor: pointer;
+  user-select: none;
+  gap: 4px;
+  transition: color 0.1s;
+}
+
+.colSortable:hover {
+  color: var(--text-primary);
+}
+
+.colSortActive {
+  color: var(--accent);
+}
+
+.colSortReset {
+  color: var(--text-muted);
+  justify-content: center;
+}
+
+.colSortReset:hover {
+  color: var(--text-primary);
+}
+
+.sortArrow {
+  font-size: 9px;
+  opacity: 0.8;
+}

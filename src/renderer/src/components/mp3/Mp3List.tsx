@@ -1,8 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import type { Mp3Item } from '@shared/types'
 import { useMp3Store } from '../../stores/mp3Store'
 import { Mp3ItemRow } from './Mp3ItemRow'
 import styles from './Mp3List.module.css'
+
+type SortField = 'name' | 'keybind' | 'duration' | 'volume' | 'default'
+type SortDir = 'asc' | 'desc'
 
 interface Props {
   mp3s: Mp3Item[]
@@ -14,8 +17,41 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
   const presets = useMp3Store((s) => s.presets)
   const dragFromIdx = useRef<number | null>(null)
   const [dropIdx, setDropIdx] = useState<number | null>(null)
-  // DOM refs for each row wrapper — lets us toggle draggable without React re-render
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const [sortField, setSortField] = useState<SortField>('default')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  const handleSort = (field: Exclude<SortField, 'default'>): void => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const resetSort = (): void => {
+    setSortField('default')
+    setSortDir('asc')
+  }
+
+  const displayMp3s = useMemo(() => {
+    if (sortField === 'default') return mp3s
+    return [...mp3s].sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'name') cmp = a.name.localeCompare(b.name, 'ja')
+      else if (sortField === 'keybind') cmp = (a.keybinds[0] ?? '').localeCompare(b.keybinds[0] ?? '')
+      else if (sortField === 'duration') cmp = a.duration - b.duration
+      else if (sortField === 'volume') cmp = (a.volume ?? 1) - (b.volume ?? 1)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [mp3s, sortField, sortDir])
+
+  const SortArrow = ({ field }: { field: Exclude<SortField, 'default'> }): JSX.Element | null => {
+    if (sortField !== field) return null
+    return <span className={styles.sortArrow}>{sortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+  }
 
   const enableDrag = (id: string): void => {
     const el = rowRefs.current.get(id)
@@ -32,8 +68,8 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
     if (from !== null && from !== toIdx) {
       const preset = presets.find((p) => p.id === activePresetId)
       if (preset) {
-        const fromId = mp3s[from]?.id
-        const toId = mp3s[toIdx]?.id
+        const fromId = displayMp3s[from]?.id
+        const toId = displayMp3s[toIdx]?.id
         const presetFromIdx = preset.mp3Ids.indexOf(fromId ?? '')
         const presetToIdx = preset.mp3Ids.indexOf(toId ?? '')
         if (presetFromIdx >= 0 && presetToIdx >= 0) {
@@ -54,21 +90,46 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
       ) : (
         <div className={styles.list}>
           <div className={styles.header}>
-            <span className={styles.colDrag} />
-            <span className={styles.colName}>名前</span>
-            <span className={styles.colKeys}>キーバインド</span>
-            <span className={styles.colDur}>時間</span>
-            <span className={styles.colVolume}>音量</span>
+            <span
+              className={`${styles.colDrag} ${styles.colSortable} ${sortField !== 'default' ? styles.colSortReset : ''}`}
+              onClick={resetSort}
+              title="デフォルト順"
+            >
+              {sortField !== 'default' && '≡'}
+            </span>
+            <span
+              className={`${styles.colName} ${styles.colSortable} ${sortField === 'name' ? styles.colSortActive : ''}`}
+              onClick={() => handleSort('name')}
+            >
+              名前<SortArrow field="name" />
+            </span>
+            <span
+              className={`${styles.colKeys} ${styles.colSortable} ${sortField === 'keybind' ? styles.colSortActive : ''}`}
+              onClick={() => handleSort('keybind')}
+            >
+              キーバインド<SortArrow field="keybind" />
+            </span>
+            <span
+              className={`${styles.colDur} ${styles.colSortable} ${sortField === 'duration' ? styles.colSortActive : ''}`}
+              onClick={() => handleSort('duration')}
+            >
+              時間<SortArrow field="duration" />
+            </span>
+            <span
+              className={`${styles.colVolume} ${styles.colSortable} ${sortField === 'volume' ? styles.colSortActive : ''}`}
+              onClick={() => handleSort('volume')}
+            >
+              音量<SortArrow field="volume" />
+            </span>
             <span className={styles.colActions} />
           </div>
-          {mp3s.map((mp3, idx) => (
+          {displayMp3s.map((mp3, idx) => (
             <div
               key={mp3.id}
               ref={(el) => {
                 if (el) rowRefs.current.set(mp3.id, el)
                 else rowRefs.current.delete(mp3.id)
               }}
-              // draggable starts false; the handle's pointerdown enables it
               draggable={false}
               onDragStart={() => { dragFromIdx.current = idx }}
               onDragOver={(e) => { e.preventDefault(); setDropIdx(idx) }}
@@ -82,7 +143,7 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
             >
               <Mp3ItemRow
                 mp3={mp3}
-                onHandlePointerDown={() => enableDrag(mp3.id)}
+                onHandlePointerDown={sortField === 'default' ? () => enableDrag(mp3.id) : undefined}
               />
             </div>
           ))}

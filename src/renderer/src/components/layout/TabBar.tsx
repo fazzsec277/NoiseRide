@@ -21,8 +21,14 @@ export function TabBar(): JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const setPlaying = useMp3Store((s) => s.setPlaying)
 
-  const [isRandom, setIsRandom] = useState(false)
-  const [randomPresetName, setRandomPresetName] = useState('')
+  const [isRandom, setIsRandom] = useState(() => randomQueueManager.active)
+  const [randomPresetName, setRandomPresetName] = useState(() => {
+    if (!randomQueueManager.active) return ''
+    const presetId = randomQueueManager.currentPresetId
+    const { presets: p } = useMp3Store.getState()
+    const preset = p.find((pr) => pr.id === presetId)
+    return preset?.name ?? '全体'
+  })
   const [editingPreset, setEditingPreset] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const editRef = useRef<HTMLInputElement>(null)

@@ -103,8 +103,9 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
     <div className={`${styles.row} ${mp3.isPlaying ? (isRandomPlaying ? styles.randomPlaying : styles.playing) : ''}`}>
       <div
         className={styles.colDrag}
-        title="ドラッグで並び替え"
+        title={onHandlePointerDown ? 'ドラッグで並び替え' : undefined}
         onPointerDown={onHandlePointerDown}
+        style={onHandlePointerDown ? undefined : { visibility: 'hidden' }}
       >
         ⠿
       </div>
