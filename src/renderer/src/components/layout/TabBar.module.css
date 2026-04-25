@@ -313,7 +313,8 @@
 
 /* キーバインド有効/無効トグル */
 .kbToggleBtn {
-  padding: 5px 12px;
+  width: 62px;
+  padding: 5px 0;
   border-radius: var(--radius-sm);
   background: none;
   border: 1px solid var(--border);
@@ -322,6 +323,7 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  text-align: center;
   transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
   flex-shrink: 0;
 }

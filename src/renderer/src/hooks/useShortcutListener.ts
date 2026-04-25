@@ -15,6 +15,7 @@ export function useShortcutListener(): void {
   }, [mp3s])
 
   const triggerByKey = useCallback((key: string): void => {
+    if (!useSettingsStore.getState().settings.keybindEnabled) return
     const keybindMap = getKeybindMap(useMp3Store.getState().mp3s)
     const ids = keybindMap[key] ?? []
     if (ids.length === 0) return

@@ -27,6 +27,7 @@ class AudioManager {
   private activeDeviceIds: string[] = ['']
   private masterVolume = 0.8
   private playing = new Map<string, PlayingEntry>()
+  private pendingPlay = new Set<string>()
   private bufferCache = new Map<string, AudioBuffer>()
   private onEndedCallbacks: OnEndedCallback[] = []
 
@@ -80,8 +81,9 @@ class AudioManager {
   }
 
   async play(mp3: Mp3Item, settings: Settings): Promise<boolean> {
-    if (this.playing.has(mp3.id)) return false
+    if (this.playing.has(mp3.id) || this.pendingPlay.has(mp3.id)) return false
     if (this.playing.size >= settings.maxConcurrent) return false
+    this.pendingPlay.add(mp3.id)
 
     const itemVolume = mp3.volume ?? 1.0
     const devices = new Map<string, DeviceEntry>()
@@ -94,8 +96,12 @@ class AudioManager {
       buffer = await this.loadBuffer(mp3.filePath, firstCtxEntry.ctx)
     } catch (err) {
       console.error('Failed to load audio:', mp3.filePath, err)
+      this.pendingPlay.delete(mp3.id)
       return false
     }
+
+    // stop() がロード中に呼ばれていた場合は中断
+    if (!this.pendingPlay.has(mp3.id)) return false
 
     // Create sources for all active contexts (buffer is reusable across contexts)
     for (const deviceId of this.activeDeviceIds) {
@@ -121,6 +127,7 @@ class AudioManager {
       filePath: mp3.filePath,
     }
     this.playing.set(mp3.id, entry)
+    this.pendingPlay.delete(mp3.id)
 
     // Wire onended to first device's source only (non-loop: cleans up all devices)
     if (!mp3.loop) {
@@ -162,6 +169,7 @@ class AudioManager {
   }
 
   stop(id: string): void {
+    this.pendingPlay.delete(id)
     const entry = this.playing.get(id)
     if (!entry) return
     if (entry.fallbackTimeoutId !== undefined) clearTimeout(entry.fallbackTimeoutId)
@@ -174,6 +182,7 @@ class AudioManager {
   }
 
   stopAll(): void {
+    this.pendingPlay.clear()
     for (const id of [...this.playing.keys()]) {
       this.stop(id)
     }
