@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useRandomStore } from '../../stores/randomStore'
 import { useRandomControls } from '../../hooks/useRandomControls'
 import { playNextRandom } from '../../hooks/useAudioEnded'
+import { getAudioDuration } from '../../hooks/useFileDrop'
 import { GLOBAL_PRESET_ID } from '@shared/types'
 import styles from './TabBar.module.css'
 
@@ -102,7 +103,7 @@ export function TabBar(): JSX.Element {
     const target = activePresetId === GLOBAL_PRESET_ID ? undefined : activePresetId
     const newItems = addMp3s(filePaths, target)
     for (const item of newItems) {
-      const dur = await audioManager.updateDuration(item)
+      const dur = await getAudioDuration(item.filePath)
       if (dur > 0) setDuration(item.id, dur)
     }
   }

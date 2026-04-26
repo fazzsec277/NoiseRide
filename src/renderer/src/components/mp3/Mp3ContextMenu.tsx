@@ -8,7 +8,7 @@ import styles from './Mp3ContextMenu.module.css'
 interface Props {
   mp3: Mp3Item
   onClose: () => void
-  anchorRef: React.RefObject<HTMLButtonElement>
+  anchorRef: React.RefObject<HTMLButtonElement | null>
 }
 
 export function Mp3ContextMenu({ mp3, onClose, anchorRef }: Props): JSX.Element {

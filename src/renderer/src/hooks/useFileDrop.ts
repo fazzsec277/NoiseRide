@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useMp3Store } from '../stores/mp3Store'
 
-function getAudioDuration(filePath: string): Promise<number> {
+export function getAudioDuration(filePath: string): Promise<number> {
   return window.api.readFileBuffer(filePath).then((data) => {
     return new Promise<number>((resolve) => {
       const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer

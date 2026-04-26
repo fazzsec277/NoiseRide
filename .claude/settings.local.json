@@ -43,7 +43,11 @@
       "PowerShell($nodePath = \"C:\\\\Users\\\\exia0\\\\AppData\\\\Local\\\\Logi\\\\LogiPluginService\\\\PluginHosts\\\\node22\\\\node\"; Set-Location \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; & \"$nodePath\\\\node.exe\" \"node_modules\\\\typescript\\\\bin\\\\tsc\" --noEmit -p tsconfig.json 2>&1)",
       "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_Claude Code\\\\NoiseRide\"; npm run typecheck 2>&1)",
       "PowerShell(Get-Command node -ErrorAction SilentlyContinue)",
-      "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
+      "Bash(npm install *)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm install --save-dev cross-env)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm run build:win 2>&1)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm uninstall cross-env 2>&1)"
     ]
   }
 }
