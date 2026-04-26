@@ -1,7 +1,7 @@
 {
   "name": "noiseride",
   "version": "1.0.0",
-  "description": "Local MP3 soundboard with keybindings",
+  "description": "NoiseRide",
   "main": "./out/main/index.js",
   "author": "",
   "scripts": {
