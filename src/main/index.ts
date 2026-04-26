@@ -14,6 +14,7 @@ function createWindow(): BrowserWindow {
     minWidth: 700,
     minHeight: 500,
     backgroundColor: '#1a1a2e',
+    icon: join(app.getAppPath(), 'icon/NoiseRide_icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

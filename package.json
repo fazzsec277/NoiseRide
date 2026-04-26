@@ -36,11 +36,13 @@
   "build": {
     "appId": "com.noiseride.app",
     "productName": "NoiseRide",
+    "icon": "icon/NoiseRide_icon.ico",
     "directories": {
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "icon/NoiseRide_icon.ico"
     }
   }
 }

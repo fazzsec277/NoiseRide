@@ -258,6 +258,7 @@ function createWindow() {
     minWidth: 700,
     minHeight: 500,
     backgroundColor: "#1a1a2e",
+    icon: path.join(electron.app.getAppPath(), "icon/NoiseRide_icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
