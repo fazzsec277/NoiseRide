@@ -29,6 +29,7 @@ class AudioManager {
   private playing = new Map<string, PlayingEntry>()
   private pendingPlay = new Set<string>()
   private bufferCache = new Map<string, AudioBuffer>()
+  private pinnedPaths = new Set<string>()
   private onEndedCallbacks: OnEndedCallback[] = []
 
   private async getCtxEntry(deviceId: string): Promise<CtxEntry> {
@@ -52,8 +53,25 @@ class AudioManager {
     const data = await window.api.readFileBuffer(filePath)
     const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
     const buffer = await ctx.decodeAudioData(ab as ArrayBuffer)
-    this.bufferCache.set(filePath, buffer)
+    if (this.pinnedPaths.has(filePath)) {
+      this.bufferCache.set(filePath, buffer)
+    }
     return buffer
+  }
+
+  pinBuffer(filePath: string): void {
+    this.pinnedPaths.add(filePath)
+    if (!this.bufferCache.has(filePath)) {
+      const deviceId = this.activeDeviceIds[0] ?? ''
+      this.getCtxEntry(deviceId)
+        .then(({ ctx }) => this.loadBuffer(filePath, ctx))
+        .catch(() => {})
+    }
+  }
+
+  unpinBuffer(filePath: string): void {
+    this.pinnedPaths.delete(filePath)
+    this.bufferCache.delete(filePath)
   }
 
   private notifyEnded(id: string): void {
@@ -336,16 +354,6 @@ class AudioManager {
     }
   }
 
-  async updateDuration(mp3: Mp3Item): Promise<number> {
-    const firstDeviceId = this.activeDeviceIds[0] ?? ''
-    try {
-      const { ctx } = await this.getCtxEntry(firstDeviceId)
-      const buffer = await this.loadBuffer(mp3.filePath, ctx)
-      return buffer.duration
-    } catch {
-      return 0
-    }
-  }
 }
 
 export const audioManager = new AudioManager()

@@ -1,6 +1,20 @@
 import { useEffect } from 'react'
 import { useMp3Store } from '../stores/mp3Store'
-import { audioManager } from '../managers/AudioManager'
+
+function getAudioDuration(filePath: string): Promise<number> {
+  return window.api.readFileBuffer(filePath).then((data) => {
+    return new Promise<number>((resolve) => {
+      const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+      const blob = new Blob([ab], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio()
+      audio.preload = 'metadata'
+      audio.src = url
+      audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration) }
+      audio.onerror = () => { URL.revokeObjectURL(url); resolve(0) }
+    })
+  }).catch(() => 0)
+}
 
 async function addAndLoadDurations(
   filePaths: string[],
@@ -10,7 +24,7 @@ async function addAndLoadDurations(
 ): Promise<void> {
   const newItems = addMp3s(filePaths, targetPresetId)
   for (const item of newItems) {
-    const dur = await audioManager.updateDuration(item)
+    const dur = await getAudioDuration(item.filePath)
     if (dur > 0) setDuration(item.id, dur)
   }
 }

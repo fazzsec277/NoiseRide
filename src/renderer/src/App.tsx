@@ -103,6 +103,9 @@ export default function App(): JSX.Element {
       const validMicId = inputIds.has(data.settings.micDeviceId ?? '') ? (data.settings.micDeviceId ?? '') : ''
 
       loadFromData(data)
+      data.mp3s.forEach((mp3) => {
+        if (mp3.keybinds.length > 0) audioManager.pinBuffer(mp3.filePath)
+      })
       loadSettings({ ...DEFAULT_SETTINGS, ...data.settings, outputDeviceIds: validOutputIds, micDeviceId: validMicId })
       audioManager.setOutputDevices(validOutputIds)
     })

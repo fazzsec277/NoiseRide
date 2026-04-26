@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMp3Store } from '../../stores/mp3Store'
 import { eventToAccelerator } from '@shared/accelerator'
 import type { Mp3Item } from '@shared/types'
+import { audioManager } from '../../managers/AudioManager'
 import styles from './KeybindEditor.module.css'
 
 interface Props {
@@ -29,7 +30,9 @@ export function KeybindEditor({ mp3 }: Props): JSX.Element {
   )
 
   const removeKey = (key: string): void => {
-    updateKeybinds(mp3.id, mp3.keybinds.filter((k) => k !== key))
+    const newKeybinds = mp3.keybinds.filter((k) => k !== key)
+    updateKeybinds(mp3.id, newKeybinds)
+    if (newKeybinds.length === 0) audioManager.unpinBuffer(mp3.filePath)
   }
 
   const startCapture = (): void => {
@@ -42,7 +45,9 @@ export function KeybindEditor({ mp3 }: Props): JSX.Element {
       if (!key) return
 
       if (!mp3.keybinds.includes(key)) {
-        updateKeybinds(mp3.id, [...mp3.keybinds, key])
+        const newKeybinds = [...mp3.keybinds, key]
+        updateKeybinds(mp3.id, newKeybinds)
+        if (newKeybinds.length === 1) audioManager.pinBuffer(mp3.filePath)
       }
       setCapturing(false)
       window.removeEventListener('keydown', onKeyDown)
