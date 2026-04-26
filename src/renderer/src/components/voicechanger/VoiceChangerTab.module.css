@@ -295,3 +295,17 @@
   font-family: 'Consolas', monospace;
   margin-left: 8px;
 }
+
+.rowWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.paramDesc {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-left: 92px;
+  line-height: 1.4;
+  margin: 0;
+}

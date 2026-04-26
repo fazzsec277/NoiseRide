@@ -48,6 +48,7 @@
   font-size: 12px;
   cursor: pointer;
   width: 160px;
+  text-align: left;
   transition: border-color 0.15s;
 }
 

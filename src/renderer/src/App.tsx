@@ -12,6 +12,7 @@ import { Mp3List } from './components/mp3/Mp3List'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { VoiceChangerTab } from './components/voicechanger/VoiceChangerTab'
 import type { AppData } from './shared/types'
+import { DEFAULT_SETTINGS } from './shared/types'
 
 interface Api {
   storage: {
@@ -102,7 +103,7 @@ export default function App(): JSX.Element {
       const validMicId = inputIds.has(data.settings.micDeviceId ?? '') ? (data.settings.micDeviceId ?? '') : ''
 
       loadFromData(data)
-      loadSettings({ ...data.settings, outputDeviceIds: validOutputIds, micDeviceId: validMicId })
+      loadSettings({ ...DEFAULT_SETTINGS, ...data.settings, outputDeviceIds: validOutputIds, micDeviceId: validMicId })
       audioManager.setOutputDevices(validOutputIds)
     })
   }, [loadFromData, loadSettings])

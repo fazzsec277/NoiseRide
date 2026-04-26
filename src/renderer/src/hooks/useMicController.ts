@@ -29,6 +29,21 @@ export function useMicController(): void {
         micManager.setEqBand('mid', settings.micEqMid)
         micManager.setEqBand('high', settings.micEqHigh)
         micManager.setCompressorEnabled(settings.micCompressorEnabled)
+        micManager.setCompressorThreshold(settings.micCompressorThreshold)
+        micManager.setCompressorRatio(settings.micCompressorRatio)
+        micManager.setCompressorAttack(settings.micCompressorAttack)
+        micManager.setCompressorRelease(settings.micCompressorRelease)
+        micManager.setEchoEnabled(settings.micEchoEnabled)
+        micManager.setEchoDelay(settings.micEchoDelay)
+        micManager.setEchoFeedback(settings.micEchoFeedback)
+        micManager.setEchoMix(settings.micEchoMix)
+        micManager.setRadioEnabled(settings.micRadioEnabled)
+        micManager.setReverbEnabled(settings.micReverbEnabled)
+        micManager.setReverbDuration(settings.micReverbDuration)
+        micManager.setReverbDecay(settings.micReverbDecay)
+        micManager.setReverbMix(settings.micReverbMix)
+        micManager.setRobotEnabled(settings.micRobotEnabled)
+        micManager.setRobotFrequency(settings.micRobotFrequency)
         micManager.setDistortionEnabled(settings.micDistortionEnabled)
         micManager.setDistortionDrive(settings.micDistortionDrive)
         micManager.setDistortionMix(settings.micDistortionMix)
@@ -66,6 +81,70 @@ export function useMicController(): void {
   useEffect(() => {
     micManager.setCompressorEnabled(settings.micCompressorEnabled)
   }, [settings.micCompressorEnabled])
+
+  useEffect(() => {
+    micManager.setCompressorThreshold(settings.micCompressorThreshold)
+  }, [settings.micCompressorThreshold])
+
+  useEffect(() => {
+    micManager.setCompressorRatio(settings.micCompressorRatio)
+  }, [settings.micCompressorRatio])
+
+  useEffect(() => {
+    micManager.setCompressorAttack(settings.micCompressorAttack)
+  }, [settings.micCompressorAttack])
+
+  useEffect(() => {
+    micManager.setCompressorRelease(settings.micCompressorRelease)
+  }, [settings.micCompressorRelease])
+
+  // Echo
+  useEffect(() => {
+    micManager.setEchoEnabled(settings.micEchoEnabled)
+  }, [settings.micEchoEnabled])
+
+  useEffect(() => {
+    micManager.setEchoDelay(settings.micEchoDelay)
+  }, [settings.micEchoDelay])
+
+  useEffect(() => {
+    micManager.setEchoFeedback(settings.micEchoFeedback)
+  }, [settings.micEchoFeedback])
+
+  useEffect(() => {
+    micManager.setEchoMix(settings.micEchoMix)
+  }, [settings.micEchoMix])
+
+  // Radio
+  useEffect(() => {
+    micManager.setRadioEnabled(settings.micRadioEnabled)
+  }, [settings.micRadioEnabled])
+
+  // Reverb
+  useEffect(() => {
+    micManager.setReverbEnabled(settings.micReverbEnabled)
+  }, [settings.micReverbEnabled])
+
+  useEffect(() => {
+    micManager.setReverbDuration(settings.micReverbDuration)
+  }, [settings.micReverbDuration])
+
+  useEffect(() => {
+    micManager.setReverbDecay(settings.micReverbDecay)
+  }, [settings.micReverbDecay])
+
+  useEffect(() => {
+    micManager.setReverbMix(settings.micReverbMix)
+  }, [settings.micReverbMix])
+
+  // Robot
+  useEffect(() => {
+    micManager.setRobotEnabled(settings.micRobotEnabled)
+  }, [settings.micRobotEnabled])
+
+  useEffect(() => {
+    micManager.setRobotFrequency(settings.micRobotFrequency)
+  }, [settings.micRobotFrequency])
 
   // Distortion
   useEffect(() => {

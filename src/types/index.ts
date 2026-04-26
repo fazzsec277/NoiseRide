@@ -29,6 +29,21 @@ export interface Settings {
   micEqMid: number
   micEqHigh: number
   micCompressorEnabled: boolean
+  micCompressorThreshold: number
+  micCompressorRatio: number
+  micCompressorAttack: number
+  micCompressorRelease: number
+  micEchoEnabled: boolean
+  micEchoDelay: number
+  micEchoFeedback: number
+  micEchoMix: number
+  micRadioEnabled: boolean
+  micReverbEnabled: boolean
+  micReverbDuration: number
+  micReverbDecay: number
+  micReverbMix: number
+  micRobotEnabled: boolean
+  micRobotFrequency: number
   micDistortionEnabled: boolean
   micDistortionDrive: number
   micDistortionMix: number
@@ -61,6 +76,21 @@ export const DEFAULT_SETTINGS: Settings = {
   micEqMid: 0,
   micEqHigh: 0,
   micCompressorEnabled: false,
+  micCompressorThreshold: -24,
+  micCompressorRatio: 12,
+  micCompressorAttack: 3,
+  micCompressorRelease: 100,
+  micEchoEnabled: false,
+  micEchoDelay: 200,
+  micEchoFeedback: 40,
+  micEchoMix: 50,
+  micRadioEnabled: false,
+  micReverbEnabled: false,
+  micReverbDuration: 1.5,
+  micReverbDecay: 2,
+  micReverbMix: 40,
+  micRobotEnabled: false,
+  micRobotFrequency: 100,
   micDistortionEnabled: false,
   micDistortionDrive: 50,
   micDistortionMix: 80,

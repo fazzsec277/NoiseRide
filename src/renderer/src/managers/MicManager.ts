@@ -12,6 +12,19 @@ function makeDistortionCurve(drive: number): Float32Array<ArrayBuffer> {
   return curve
 }
 
+/** 指数減衰ノイズでリバーブ用インパルス応答を生成する。 */
+function buildImpulse(ctx: AudioContext, duration: number, decay: number): AudioBuffer {
+  const len = Math.floor(ctx.sampleRate * duration)
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch)
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay)
+    }
+  }
+  return buf
+}
+
 /** Tone 値 (0〜100) をローパスカットオフ周波数 (Hz) に変換する。 */
 function toneToFreq(tone: number): number {
   return 500 * Math.pow(40, tone / 100)  // 500 Hz〜20 kHz
@@ -22,14 +35,29 @@ interface CtxEntry {
   source: MediaStreamAudioSourceNode
   gainNode: GainNode
   pitchNode: AudioWorkletNode | null
+  robotBypassGain: GainNode
+  robotRingModGain: GainNode
+  robotOscillator: OscillatorNode
+  robotWetGain: GainNode
   lowFilter: BiquadFilterNode
   midFilter: BiquadFilterNode
   highFilter: BiquadFilterNode
+  echoDryGain: GainNode
+  echoDelayNode: DelayNode
+  echoFeedbackGain: GainNode
+  echoWetGain: GainNode
+  radioBypassGain: GainNode
+  radioHighpass: BiquadFilterNode
+  radioLowpass: BiquadFilterNode
+  radioWetGain: GainNode
   distDryGain: GainNode
   distPreGain: GainNode
   waveshaper: WaveShaperNode
   distToneFilter: BiquadFilterNode
   distWetGain: GainNode
+  reverbDryGain: GainNode
+  reverbConvolver: ConvolverNode
+  reverbWetGain: GainNode
   compressor: DynamicsCompressorNode
 }
 
@@ -48,6 +76,21 @@ class MicManager {
   private eqMid = 0
   private eqHigh = 0
   private compressorEnabled = false
+  private compressorThreshold = -24
+  private compressorRatio = 12
+  private compressorAttack = 3
+  private compressorRelease = 100
+  private echoEnabled = false
+  private echoDelay = 200
+  private echoFeedback = 40
+  private echoMix = 50
+  private radioEnabled = false
+  private reverbEnabled = false
+  private reverbDuration = 1.5
+  private reverbDecay = 2
+  private reverbMix = 40
+  private robotEnabled = false
+  private robotFrequency = 100
   private distortionEnabled = false
   private distortionDrive = 50
   private distortionMix = 80
@@ -123,6 +166,34 @@ class MicManager {
       highFilter.frequency.value = 4000
       highFilter.gain.value = this.eqHigh
 
+      // Echo (parallel dry/wet with feedback loop)
+      const echoDryGain = ctx.createGain()
+      echoDryGain.gain.value = this.echoEnabled ? (100 - this.echoMix) / 100 : 1
+
+      const echoDelayNode = ctx.createDelay(2.0)
+      echoDelayNode.delayTime.value = this.echoDelay / 1000
+
+      const echoFeedbackGain = ctx.createGain()
+      echoFeedbackGain.gain.value = this.echoFeedback / 100
+
+      const echoWetGain = ctx.createGain()
+      echoWetGain.gain.value = this.echoEnabled ? this.echoMix / 100 : 0
+
+      // Radio (bypass or HP+LP bandpass)
+      const radioBypassGain = ctx.createGain()
+      radioBypassGain.gain.value = this.radioEnabled ? 0 : 1
+
+      const radioHighpass = ctx.createBiquadFilter()
+      radioHighpass.type = 'highpass'
+      radioHighpass.frequency.value = 300
+
+      const radioLowpass = ctx.createBiquadFilter()
+      radioLowpass.type = 'lowpass'
+      radioLowpass.frequency.value = 3000
+
+      const radioWetGain = ctx.createGain()
+      radioWetGain.gain.value = this.radioEnabled ? 1 : 0
+
       // Distortion (parallel dry/wet)
       const { dry, wet, pre } = this.distGains()
 
@@ -143,23 +214,52 @@ class MicManager {
       const distWetGain = ctx.createGain()
       distWetGain.gain.value = wet
 
+      // Reverb (parallel dry/wet with synthesized impulse response)
+      const reverbDryGain = ctx.createGain()
+      reverbDryGain.gain.value = this.reverbEnabled ? (100 - this.reverbMix) / 100 : 1
+
+      const reverbConvolver = ctx.createConvolver()
+      reverbConvolver.buffer = buildImpulse(ctx, this.reverbDuration, this.reverbDecay)
+
+      const reverbWetGain = ctx.createGain()
+      reverbWetGain.gain.value = this.reverbEnabled ? this.reverbMix / 100 : 0
+
       // Compressor
       const compressor = ctx.createDynamicsCompressor()
-      compressor.threshold.value = this.compressorEnabled ? -24 : 0
+      compressor.threshold.value = this.compressorEnabled ? this.compressorThreshold : 0
       compressor.knee.value = 30
-      compressor.ratio.value = 12
-      compressor.attack.value = 0.003
-      compressor.release.value = 0.25
+      compressor.ratio.value = this.compressorRatio
+      compressor.attack.value = this.compressorAttack / 1000
+      compressor.release.value = this.compressorRelease / 1000
+
+      // Robot (ring modulation: source × oscillator carrier)
+      const robotBypassGain = ctx.createGain()
+      robotBypassGain.gain.value = this.robotEnabled ? 0 : 1
+
+      const robotRingModGain = ctx.createGain()
+
+      const robotOscillator = ctx.createOscillator()
+      robotOscillator.type = 'sine'
+      robotOscillator.frequency.value = this.robotFrequency
+      robotOscillator.connect(robotRingModGain.gain)
+      robotOscillator.start()
+
+      const robotWetGain = ctx.createGain()
+      robotWetGain.gain.value = this.robotEnabled ? 1 : 0
 
       const source = ctx.createMediaStreamSource(this.stream!)
       const gainNode = ctx.createGain()
       gainNode.gain.value = this.effectiveGain()
 
       // Signal chain:
-      //   source → gain → [pitchNode →] low → mid → high
-      //   → distDryGain ──────────────────────────────────→ compressor → dest
-      //   → distPreGain → waveshaper → toneFilter → distWetGain ┘
-      source.connect(gainNode)
+      //   source → robot(bypass/ring-mod) → gain → [pitch →] EQ(low→mid→high)
+      //   → echo(dry/wet+feedback) → radio(bypass/HP+LP) → dist(dry/wet)
+      //   → reverb(dry/wet) → compressor → dest
+      source.connect(robotBypassGain)
+      source.connect(robotRingModGain)
+      robotRingModGain.connect(robotWetGain)
+      robotBypassGain.connect(gainNode)
+      robotWetGain.connect(gainNode)
       let lastNode: AudioNode = gainNode
       if (pitchNode) {
         gainNode.connect(pitchNode)
@@ -169,14 +269,38 @@ class MicManager {
       lowFilter.connect(midFilter)
       midFilter.connect(highFilter)
 
-      highFilter.connect(distDryGain)
-      highFilter.connect(distPreGain)
+      // Echo
+      highFilter.connect(echoDryGain)
+      highFilter.connect(echoDelayNode)
+      echoDelayNode.connect(echoFeedbackGain)
+      echoFeedbackGain.connect(echoDelayNode)  // feedback loop
+      echoDelayNode.connect(echoWetGain)
+
+      // Radio (both echo paths feed into bypass and filtered paths)
+      echoDryGain.connect(radioBypassGain)
+      echoDryGain.connect(radioHighpass)
+      echoWetGain.connect(radioBypassGain)
+      echoWetGain.connect(radioHighpass)
+      radioHighpass.connect(radioLowpass)
+      radioLowpass.connect(radioWetGain)
+
+      // Distortion
+      radioBypassGain.connect(distDryGain)
+      radioBypassGain.connect(distPreGain)
+      radioWetGain.connect(distDryGain)
+      radioWetGain.connect(distPreGain)
       distPreGain.connect(waveshaper)
       waveshaper.connect(distToneFilter)
       distToneFilter.connect(distWetGain)
 
-      distDryGain.connect(compressor)
-      distWetGain.connect(compressor)
+      // Reverb
+      distDryGain.connect(reverbDryGain)
+      distDryGain.connect(reverbConvolver)
+      distWetGain.connect(reverbDryGain)
+      distWetGain.connect(reverbConvolver)
+      reverbConvolver.connect(reverbWetGain)
+      reverbDryGain.connect(compressor)
+      reverbWetGain.connect(compressor)
       compressor.connect(ctx.destination)
 
       if (isFirst) {
@@ -189,8 +313,12 @@ class MicManager {
 
       this.ctxMap.set(deviceId, {
         ctx, source, gainNode, pitchNode,
+        robotBypassGain, robotRingModGain, robotOscillator, robotWetGain,
         lowFilter, midFilter, highFilter,
+        echoDryGain, echoDelayNode, echoFeedbackGain, echoWetGain,
+        radioBypassGain, radioHighpass, radioLowpass, radioWetGain,
         distDryGain, distPreGain, waveshaper, distToneFilter, distWetGain,
+        reverbDryGain, reverbConvolver, reverbWetGain,
         compressor
       })
     }
@@ -249,8 +377,34 @@ class MicManager {
 
   setCompressorEnabled(enabled: boolean): void {
     this.compressorEnabled = enabled
-    const threshold = enabled ? -24 : 0
-    for (const { compressor } of this.ctxMap.values()) compressor.threshold.value = threshold
+    for (const { compressor } of this.ctxMap.values()) {
+      compressor.threshold.value = enabled ? this.compressorThreshold : 0
+      compressor.ratio.value = this.compressorRatio
+      compressor.attack.value = this.compressorAttack / 1000
+      compressor.release.value = this.compressorRelease / 1000
+    }
+  }
+
+  setCompressorThreshold(threshold: number): void {
+    this.compressorThreshold = threshold
+    if (this.compressorEnabled) {
+      for (const { compressor } of this.ctxMap.values()) compressor.threshold.value = threshold
+    }
+  }
+
+  setCompressorRatio(ratio: number): void {
+    this.compressorRatio = ratio
+    for (const { compressor } of this.ctxMap.values()) compressor.ratio.value = ratio
+  }
+
+  setCompressorAttack(ms: number): void {
+    this.compressorAttack = ms
+    for (const { compressor } of this.ctxMap.values()) compressor.attack.value = ms / 1000
+  }
+
+  setCompressorRelease(ms: number): void {
+    this.compressorRelease = ms
+    for (const { compressor } of this.ctxMap.values()) compressor.release.value = ms / 1000
   }
 
   setDistortionEnabled(enabled: boolean): void {
@@ -272,6 +426,87 @@ class MicManager {
     this.distortionTone = tone
     const freq = toneToFreq(tone)
     for (const { distToneFilter } of this.ctxMap.values()) distToneFilter.frequency.value = freq
+  }
+
+  setEchoEnabled(enabled: boolean): void {
+    this.echoEnabled = enabled
+    for (const entry of this.ctxMap.values()) {
+      entry.echoDryGain.gain.value = enabled ? (100 - this.echoMix) / 100 : 1
+      entry.echoWetGain.gain.value = enabled ? this.echoMix / 100 : 0
+    }
+  }
+
+  setEchoDelay(ms: number): void {
+    this.echoDelay = ms
+    for (const { echoDelayNode } of this.ctxMap.values()) echoDelayNode.delayTime.value = ms / 1000
+  }
+
+  setEchoFeedback(pct: number): void {
+    this.echoFeedback = pct
+    for (const { echoFeedbackGain } of this.ctxMap.values()) echoFeedbackGain.gain.value = pct / 100
+  }
+
+  setEchoMix(pct: number): void {
+    this.echoMix = pct
+    if (this.echoEnabled) {
+      for (const entry of this.ctxMap.values()) {
+        entry.echoDryGain.gain.value = (100 - pct) / 100
+        entry.echoWetGain.gain.value = pct / 100
+      }
+    }
+  }
+
+  setRadioEnabled(enabled: boolean): void {
+    this.radioEnabled = enabled
+    for (const entry of this.ctxMap.values()) {
+      entry.radioBypassGain.gain.value = enabled ? 0 : 1
+      entry.radioWetGain.gain.value = enabled ? 1 : 0
+    }
+  }
+
+  setReverbEnabled(enabled: boolean): void {
+    this.reverbEnabled = enabled
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbDryGain.gain.value = enabled ? (100 - this.reverbMix) / 100 : 1
+      entry.reverbWetGain.gain.value = enabled ? this.reverbMix / 100 : 0
+    }
+  }
+
+  setReverbDuration(seconds: number): void {
+    this.reverbDuration = seconds
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbConvolver.buffer = buildImpulse(entry.ctx, seconds, this.reverbDecay)
+    }
+  }
+
+  setReverbDecay(decay: number): void {
+    this.reverbDecay = decay
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbConvolver.buffer = buildImpulse(entry.ctx, this.reverbDuration, decay)
+    }
+  }
+
+  setReverbMix(pct: number): void {
+    this.reverbMix = pct
+    if (this.reverbEnabled) {
+      for (const entry of this.ctxMap.values()) {
+        entry.reverbDryGain.gain.value = (100 - pct) / 100
+        entry.reverbWetGain.gain.value = pct / 100
+      }
+    }
+  }
+
+  setRobotEnabled(enabled: boolean): void {
+    this.robotEnabled = enabled
+    for (const entry of this.ctxMap.values()) {
+      entry.robotBypassGain.gain.value = enabled ? 0 : 1
+      entry.robotWetGain.gain.value = enabled ? 1 : 0
+    }
+  }
+
+  setRobotFrequency(freq: number): void {
+    this.robotFrequency = freq
+    for (const { robotOscillator } of this.ctxMap.values()) robotOscillator.frequency.value = freq
   }
 
   private _applyDistortion(): void {

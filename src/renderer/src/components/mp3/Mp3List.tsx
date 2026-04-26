@@ -4,7 +4,7 @@ import { useMp3Store } from '../../stores/mp3Store'
 import { Mp3ItemRow } from './Mp3ItemRow'
 import styles from './Mp3List.module.css'
 
-type SortField = 'name' | 'keybind' | 'duration' | 'volume' | 'status' | 'default'
+type SortField = 'name' | 'keybind' | 'duration' | 'volume' | 'status' | 'playing' | 'default'
 type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -36,6 +36,15 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
     setSortDir('asc')
   }
 
+  const handlePlayingColumnClick = (): void => {
+    if (sortField === 'default') {
+      setSortField('playing')
+      setSortDir('desc')
+    } else {
+      resetSort()
+    }
+  }
+
   const displayMp3s = useMemo(() => {
     if (sortField === 'default') return mp3s
     return [...mp3s].sort((a, b) => {
@@ -55,6 +64,8 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
         const scoreB = (b.loop ? 2 : 0) + (b.restart ? 1 : 0)
         cmp = scoreA - scoreB
       }
+      else if (sortField === 'playing')
+        cmp = (a.isPlaying ? 1 : 0) - (b.isPlaying ? 1 : 0)
       return sortDir === 'asc' ? cmp : -cmp
     })
   }, [mp3s, sortField, sortDir])
@@ -102,11 +113,11 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
         <div className={styles.list}>
           <div className={styles.header}>
             <span
-              className={`${styles.colDrag} ${styles.colSortable} ${sortField !== 'default' ? styles.colSortReset : ''}`}
-              onClick={resetSort}
-              title="デフォルト順"
+              className={`${styles.colDrag} ${styles.colSortable} ${sortField === 'playing' ? styles.colSortActive : ''} ${sortField !== 'default' && sortField !== 'playing' ? styles.colSortReset : ''}`}
+              onClick={handlePlayingColumnClick}
+              title={sortField === 'default' ? '再生中でソート' : 'デフォルト順に戻す'}
             >
-              {sortField !== 'default' && '≡'}
+              {sortField === 'default' ? '▶' : '≡'}
             </span>
             <span
               className={`${styles.colName} ${styles.colSortable} ${sortField === 'name' ? styles.colSortActive : ''}`}
