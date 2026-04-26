@@ -298,3 +298,11 @@
 .confirmNo:hover {
   background: var(--bg-hover);
 }
+
+.versionSection {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}

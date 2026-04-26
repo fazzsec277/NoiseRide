@@ -116,6 +116,9 @@ ipcMain.handle('file:readBuffer', (_e, filePath: string): Buffer => {
   return readFileSync(filePath)
 })
 
+// ── App Info IPC ─────────────────────────────────────────────
+ipcMain.handle('app:version', (): string => app.getVersion())
+
 // ── File Dialog IPC ──────────────────────────────────────────
 ipcMain.handle('dialog:openMp3', async (): Promise<string[]> => {
   const win = BrowserWindow.getFocusedWindow()

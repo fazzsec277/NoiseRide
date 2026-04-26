@@ -43,6 +43,17 @@
     "win": {
       "target": "nsis",
       "icon": "icon/NoiseRide_icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NoiseRide",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "icon/NoiseRide_icon.ico",
+      "uninstallerIcon": "icon/NoiseRide_icon.ico"
     }
   }
 }

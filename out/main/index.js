@@ -333,6 +333,7 @@ electron.ipcMain.handle("random:setStopKey", (_e, acc) => {
 electron.ipcMain.handle("file:readBuffer", (_e, filePath) => {
   return fs.readFileSync(filePath);
 });
+electron.ipcMain.handle("app:version", () => electron.app.getVersion());
 electron.ipcMain.handle("dialog:openMp3", async () => {
   const win = electron.BrowserWindow.getFocusedWindow();
   if (!win) return [];

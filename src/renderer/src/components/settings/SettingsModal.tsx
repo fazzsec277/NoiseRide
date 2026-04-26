@@ -27,6 +27,11 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
   const [confirmClearMp3s, setConfirmClearMp3s] = useState(false)
   const [confirmClearPresets, setConfirmClearPresets] = useState(false)
   const [recording, setRecording] = useState<RecordTarget>(null)
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    window.api.getVersion().then(setAppVersion)
+  }, [])
 
   useEffect(() => {
     if (!recording) return
@@ -163,6 +168,10 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
                 <button className={styles.dangerBtn} onClick={() => setConfirmClearPresets(true)}>削除</button>
               )}
             </div>
+          </div>
+
+          <div className={styles.versionSection}>
+            v{appVersion}
           </div>
         </div>
       </div>

@@ -90,6 +90,7 @@ const api = {
   dialog: {
     openMp3: (): Promise<string[]> => ipcRenderer.invoke('dialog:openMp3')
   },
+  getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   readFileBuffer: (filePath: string): Promise<Uint8Array> =>
     ipcRenderer.invoke('file:readBuffer', filePath),
   onFileDropped: (cb: FileDropCallback): (() => void) => {
