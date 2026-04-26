@@ -1,0 +1,11 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.noiseride.app
+productName: NoiseRide
+icon: icon/NoiseRide_icon.ico
+win:
+  target: nsis
+  icon: icon/NoiseRide_icon.ico
+files: []
+electronVersion: 33.4.11

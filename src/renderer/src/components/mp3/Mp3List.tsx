@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from 'react'
 import type { Mp3Item } from '@shared/types'
 import { useMp3Store } from '../../stores/mp3Store'
+import { useRandomStore } from '../../stores/randomStore'
 import { Mp3ItemRow } from './Mp3ItemRow'
 import styles from './Mp3List.module.css'
 
@@ -18,6 +19,10 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
   const dragFromIdx = useRef<number | null>(null)
   const [dropIdx, setDropIdx] = useState<number | null>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const loadingIds = useMp3Store((s) => s.loadingIds)
+  const randomLoadingId = useRandomStore((s) => s.randomLoadingId)
+  const currentRandomPlayingId = useRandomStore((s) => s.currentRandomPlayingId)
 
   const [sortField, setSortField] = useState<SortField>('default')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -64,11 +69,19 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
         const scoreB = (b.loop ? 2 : 0) + (b.restart ? 1 : 0)
         cmp = scoreA - scoreB
       }
-      else if (sortField === 'playing')
-        cmp = (a.isPlaying ? 1 : 0) - (b.isPlaying ? 1 : 0)
+      else if (sortField === 'playing') {
+        const score = (m: Mp3Item): number => {
+          if (m.isPlaying && m.id === currentRandomPlayingId) return 4
+          if (m.isPlaying) return 3
+          if (m.id === randomLoadingId) return 2
+          if (loadingIds.includes(m.id)) return 1
+          return 0
+        }
+        cmp = score(a) - score(b)
+      }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [mp3s, sortField, sortDir])
+  }, [mp3s, sortField, sortDir, randomLoadingId, currentRandomPlayingId, loadingIds])
 
   const SortArrow = ({ field }: { field: Exclude<SortField, 'default'> }): JSX.Element | null => {
     if (sortField !== field) return null

@@ -20,6 +20,9 @@ interface Mp3State {
   presets: Preset[]
   activePresetId: string
 
+  loadingIds: string[]
+  setLoading: (id: string, loading: boolean) => void
+
   addMp3s: (filePaths: string[], targetPresetId?: string) => Mp3Item[]
   removeMp3: (id: string) => void
   removeFromPreset: (id: string, presetId: string) => void
@@ -49,6 +52,12 @@ export const useMp3Store = create<Mp3State>((set, get) => ({
   mp3s: [],
   presets: [{ id: GLOBAL_PRESET_ID, name: '全体', mp3Ids: [] }],
   activePresetId: GLOBAL_PRESET_ID,
+  loadingIds: [],
+  setLoading: (id, loading) => set((s) => ({
+    loadingIds: loading
+      ? s.loadingIds.includes(id) ? s.loadingIds : [...s.loadingIds, id]
+      : s.loadingIds.filter((i) => i !== id)
+  })),
 
   addMp3s: (filePaths, targetPresetId) => {
     const newItems: Mp3Item[] = filePaths.map((fp) => ({

@@ -12575,17 +12575,61 @@ const DEFAULT_SETTINGS = {
   maxConcurrent: 10,
   masterVolume: 0.8,
   theme: "dark",
-  outputDeviceId: ""
+  outputDeviceIds: [],
+  micDeviceId: "",
+  micInputGain: 1,
+  micMuted: false,
+  micPitchSemitones: 0,
+  micFormantSemitones: 0,
+  micEqLow: 0,
+  micEqMid: 0,
+  micEqHigh: 0,
+  micCompressorEnabled: false,
+  micCompressorThreshold: -24,
+  micCompressorRatio: 12,
+  micCompressorAttack: 3,
+  micCompressorRelease: 100,
+  micEchoEnabled: false,
+  micEchoDelay: 200,
+  micEchoFeedback: 40,
+  micEchoMix: 50,
+  micRadioEnabled: false,
+  micReverbEnabled: false,
+  micReverbDuration: 1.5,
+  micReverbDecay: 2,
+  micReverbMix: 40,
+  micRobotEnabled: false,
+  micRobotFrequency: 100,
+  micDistortionEnabled: false,
+  micDistortionDrive: 50,
+  micDistortionMix: 80,
+  micDistortionTone: 70,
+  micPushToKey: false,
+  micPushToKeyBind: "",
+  randomPrevBind: "",
+  randomNextBind: "",
+  randomStopBind: "",
+  keybindEnabled: true
 };
 const GLOBAL_PRESET_ID = "global";
 function basenameMp3(filePath) {
   const name = filePath.replace(/\\/g, "/").split("/").pop() ?? filePath;
   return name.replace(/\.mp3$/i, "");
 }
+function reorder(arr, from, to) {
+  const next = [...arr];
+  const [item2] = next.splice(from, 1);
+  next.splice(to, 0, item2);
+  return next;
+}
 const useMp3Store = create((set, get) => ({
   mp3s: [],
   presets: [{ id: GLOBAL_PRESET_ID, name: "全体", mp3Ids: [] }],
   activePresetId: GLOBAL_PRESET_ID,
+  loadingIds: [],
+  setLoading: (id, loading) => set((s) => ({
+    loadingIds: loading ? s.loadingIds.includes(id) ? s.loadingIds : [...s.loadingIds, id] : s.loadingIds.filter((i) => i !== id)
+  })),
   addMp3s: (filePaths, targetPresetId) => {
     const newItems = filePaths.map((fp) => ({
       id: v4(),
@@ -12593,7 +12637,10 @@ const useMp3Store = create((set, get) => ({
       filePath: fp,
       duration: 0,
       keybinds: [],
-      isPlaying: false
+      isPlaying: false,
+      loop: false,
+      restart: false,
+      volume: 1
     }));
     set((s) => {
       const updatedMp3s = [...s.mp3s, ...newItems];
@@ -12647,6 +12694,28 @@ const useMp3Store = create((set, get) => ({
       mp3s: s.mp3s.map((m) => m.id === id ? { ...m, duration: duration2 } : m)
     }));
   },
+  updateVolume: (id, volume) => {
+    set((s) => ({
+      mp3s: s.mp3s.map((m) => m.id === id ? { ...m, volume } : m)
+    }));
+  },
+  toggleLoop: (id) => {
+    set((s) => ({
+      mp3s: s.mp3s.map((m) => m.id === id ? { ...m, loop: !(m.loop ?? false) } : m)
+    }));
+  },
+  toggleRestart: (id) => {
+    set((s) => ({
+      mp3s: s.mp3s.map((m) => m.id === id ? { ...m, restart: !(m.restart ?? false) } : m)
+    }));
+  },
+  reorderMp3InPreset: (presetId, fromIdx, toIdx) => {
+    set((s) => ({
+      presets: s.presets.map(
+        (p) => p.id === presetId ? { ...p, mp3Ids: reorder(p.mp3Ids, fromIdx, toIdx) } : p
+      )
+    }));
+  },
   addPreset: (name) => {
     set((s) => ({
       presets: [...s.presets, { id: v4(), name, mp3Ids: [] }]
@@ -12675,6 +12744,24 @@ const useMp3Store = create((set, get) => ({
     }));
   },
   setActivePreset: (id) => set({ activePresetId: id }),
+  clearAllMp3s: () => {
+    set((s) => ({
+      mp3s: [],
+      presets: s.presets.map((p) => ({ ...p, mp3Ids: [] }))
+    }));
+  },
+  clearAllPresets: () => {
+    set((s) => ({
+      presets: s.presets.filter((p) => p.id === GLOBAL_PRESET_ID),
+      activePresetId: GLOBAL_PRESET_ID
+    }));
+  },
+  reorderPresets: (fromIdx, toIdx) => {
+    set((s) => {
+      if (fromIdx === 0 || toIdx === 0) return s;
+      return { presets: reorder(s.presets, fromIdx, toIdx) };
+    });
+  },
   loadFromData: (data) => {
     set({
       mp3s: data.mp3s.map((m) => ({ ...m, isPlaying: false })),
@@ -12702,32 +12789,58 @@ const useSettingsStore = create((set) => ({
   loadSettings: (s) => set({ settings: s })
 }));
 class AudioManager {
-  ctx = null;
-  masterGain = null;
+  ctxMap = /* @__PURE__ */ new Map();
+  activeDeviceIds = [""];
+  masterVolume = 0.8;
   playing = /* @__PURE__ */ new Map();
+  pendingPlay = /* @__PURE__ */ new Set();
   bufferCache = /* @__PURE__ */ new Map();
+  pinnedPaths = /* @__PURE__ */ new Set();
   onEndedCallbacks = [];
-  async loadBuffer(ctx, filePath) {
+  async getCtxEntry(deviceId) {
+    let entry = this.ctxMap.get(deviceId);
+    if (!entry || entry.ctx.state === "closed") {
+      const ctx = deviceId ? new AudioContext({ sinkId: deviceId }) : new AudioContext();
+      const masterGain = ctx.createGain();
+      masterGain.gain.value = this.masterVolume;
+      masterGain.connect(ctx.destination);
+      entry = { ctx, masterGain };
+      this.ctxMap.set(deviceId, entry);
+    }
+    if (entry.ctx.state === "suspended") await entry.ctx.resume();
+    return entry;
+  }
+  async loadBuffer(filePath, ctx) {
+    const cached = this.bufferCache.get(filePath);
+    if (cached) return cached;
     const data = await window.api.readFileBuffer(filePath);
     const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-    return ctx.decodeAudioData(ab);
-  }
-  getCtx() {
-    if (!this.ctx || this.ctx.state === "closed") {
-      this.ctx = new AudioContext();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.connect(this.ctx.destination);
+    const buffer = await ctx.decodeAudioData(ab);
+    if (this.pinnedPaths.has(filePath)) {
+      this.bufferCache.set(filePath, buffer);
     }
-    return this.ctx;
+    return buffer;
+  }
+  pinBuffer(filePath) {
+    this.pinnedPaths.add(filePath);
+    if (!this.bufferCache.has(filePath)) {
+      const deviceId = this.activeDeviceIds[0] ?? "";
+      this.getCtxEntry(deviceId).then(({ ctx }) => this.loadBuffer(filePath, ctx)).catch(() => {
+      });
+    }
+  }
+  unpinBuffer(filePath) {
+    this.pinnedPaths.delete(filePath);
+    this.bufferCache.delete(filePath);
+  }
+  notifyEnded(id) {
+    this.onEndedCallbacks.forEach((cb) => cb(id));
   }
   onEnded(cb) {
     this.onEndedCallbacks.push(cb);
     return () => {
       this.onEndedCallbacks = this.onEndedCallbacks.filter((c) => c !== cb);
     };
-  }
-  notifyEnded(id) {
-    this.onEndedCallbacks.forEach((cb) => cb(id));
   }
   isPlaying(id) {
     return this.playing.has(id);
@@ -12736,79 +12849,237 @@ class AudioManager {
     return this.playing.size;
   }
   async play(mp3, settings) {
-    if (this.playing.has(mp3.id)) return false;
+    if (this.playing.has(mp3.id) || this.pendingPlay.has(mp3.id)) return false;
     if (this.playing.size >= settings.maxConcurrent) return false;
-    const ctx = this.getCtx();
-    if (ctx.state === "suspended") await ctx.resume();
-    let buffer = this.bufferCache.get(mp3.filePath);
-    if (!buffer) {
-      try {
-        buffer = await this.loadBuffer(ctx, mp3.filePath);
-        this.bufferCache.set(mp3.filePath, buffer);
-      } catch (err) {
-        console.error("Failed to load audio:", mp3.filePath, err);
-        return false;
+    this.pendingPlay.add(mp3.id);
+    const itemVolume = mp3.volume ?? 1;
+    const devices = /* @__PURE__ */ new Map();
+    const firstDeviceId = this.activeDeviceIds[0] ?? "";
+    const firstCtxEntry = await this.getCtxEntry(firstDeviceId);
+    let buffer;
+    try {
+      buffer = await this.loadBuffer(mp3.filePath, firstCtxEntry.ctx);
+    } catch (err) {
+      console.error("Failed to load audio:", mp3.filePath, err);
+      this.pendingPlay.delete(mp3.id);
+      return false;
+    }
+    if (!this.pendingPlay.has(mp3.id)) return null;
+    for (const deviceId of this.activeDeviceIds) {
+      const { ctx, masterGain } = await this.getCtxEntry(deviceId);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = itemVolume;
+      gainNode.connect(masterGain);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = mp3.loop ?? false;
+      source.connect(gainNode);
+      devices.set(deviceId, { source, gainNode });
+    }
+    const entry = {
+      devices,
+      itemVolume,
+      startCtxTime: firstCtxEntry.ctx.currentTime,
+      startOffset: 0,
+      duration: buffer.duration,
+      filePath: mp3.filePath,
+      buffer
+    };
+    this.playing.set(mp3.id, entry);
+    this.pendingPlay.delete(mp3.id);
+    if (!mp3.loop) {
+      const firstDevice = devices.get(firstDeviceId);
+      if (firstDevice) {
+        firstDevice.source.onended = () => {
+          if (!this.playing.has(mp3.id)) return;
+          const e = this.playing.get(mp3.id);
+          if (e.fallbackTimeoutId !== void 0) clearTimeout(e.fallbackTimeoutId);
+          this.playing.delete(mp3.id);
+          for (const [dId, dev] of devices.entries()) {
+            if (dId !== firstDeviceId) {
+              try {
+                dev.source.stop();
+              } catch {
+              }
+              dev.gainNode.disconnect();
+            }
+          }
+          firstDevice.gainNode.disconnect();
+          this.notifyEnded(mp3.id);
+        };
       }
     }
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = settings.masterVolume;
-    gainNode.connect(this.masterGain);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(gainNode);
-    source.onended = () => {
-      this.playing.delete(mp3.id);
-      gainNode.disconnect();
-      this.notifyEnded(mp3.id);
-    };
-    source.start();
-    this.playing.set(mp3.id, { source, gainNode });
+    for (const { source } of devices.values()) {
+      source.start();
+    }
+    if (!mp3.loop) {
+      const fallbackMs = (buffer.duration + 2) * 1e3;
+      const timeoutId = window.setTimeout(() => {
+        if (!this.playing.has(mp3.id)) return;
+        this.playing.delete(mp3.id);
+        this.notifyEnded(mp3.id);
+      }, fallbackMs);
+      entry.fallbackTimeoutId = timeoutId;
+    }
     return true;
   }
   stop(id) {
+    this.pendingPlay.delete(id);
     const entry = this.playing.get(id);
     if (!entry) return;
-    try {
-      entry.source.stop();
-    } catch {
-    }
+    if (entry.fallbackTimeoutId !== void 0) clearTimeout(entry.fallbackTimeoutId);
     this.playing.delete(id);
-    entry.gainNode.disconnect();
+    for (const { source, gainNode } of entry.devices.values()) {
+      try {
+        source.stop();
+      } catch {
+      }
+      gainNode.disconnect();
+    }
     this.notifyEnded(id);
   }
   stopAll() {
+    this.pendingPlay.clear();
     for (const id of [...this.playing.keys()]) {
       this.stop(id);
     }
   }
   setMasterVolume(volume) {
-    if (this.masterGain) {
-      this.masterGain.gain.value = volume;
-    }
-    for (const entry of this.playing.values()) {
-      entry.gainNode.gain.value = volume;
+    this.masterVolume = volume;
+    for (const { masterGain } of this.ctxMap.values()) {
+      masterGain.gain.value = volume;
     }
   }
-  async setOutputDevice(deviceId) {
-    if (!this.ctx) return;
-    try {
-      await this.ctx.setSinkId(deviceId || "");
-    } catch (err) {
-      console.warn("setSinkId not supported:", err);
+  updateItemGain(id, volume) {
+    const entry = this.playing.get(id);
+    if (!entry) return;
+    entry.itemVolume = volume;
+    for (const { gainNode } of entry.devices.values()) {
+      gainNode.gain.value = volume;
     }
   }
-  async updateDuration(mp3) {
-    let buffer = this.bufferCache.get(mp3.filePath);
-    if (!buffer) {
-      try {
-        const ctx = this.getCtx();
-        buffer = await this.loadBuffer(ctx, mp3.filePath);
-        this.bufferCache.set(mp3.filePath, buffer);
-      } catch {
-        return 0;
+  updateLoop(id, loop) {
+    const entry = this.playing.get(id);
+    if (!entry) return;
+    if (loop) {
+      for (const { source } of entry.devices.values()) {
+        source.loop = true;
+        source.onended = null;
+      }
+    } else {
+      for (const { source } of entry.devices.values()) {
+        source.loop = false;
+      }
+      const firstDeviceId = this.activeDeviceIds[0] ?? "";
+      const firstDevice = entry.devices.get(firstDeviceId);
+      if (firstDevice) {
+        firstDevice.source.onended = () => {
+          if (!this.playing.has(id)) return;
+          this.playing.delete(id);
+          for (const [dId, dev] of entry.devices.entries()) {
+            if (dId !== firstDeviceId) {
+              try {
+                dev.source.stop();
+              } catch {
+              }
+              dev.gainNode.disconnect();
+            }
+          }
+          firstDevice.gainNode.disconnect();
+          this.notifyEnded(id);
+        };
       }
     }
-    return buffer.duration;
+  }
+  async setOutputDevices(deviceIds) {
+    const newIds = deviceIds.length > 0 ? deviceIds : [""];
+    const newSet = new Set(newIds);
+    for (const [key, ctxEntry] of this.ctxMap.entries()) {
+      if (!newSet.has(key)) {
+        try {
+          await ctxEntry.ctx.close();
+        } catch {
+        }
+        this.ctxMap.delete(key);
+      }
+    }
+    this.activeDeviceIds = newIds;
+    for (const deviceId of newIds) {
+      await this.getCtxEntry(deviceId);
+    }
+  }
+  getCurrentTime(id) {
+    const entry = this.playing.get(id);
+    if (!entry) return 0;
+    const firstDeviceId = this.activeDeviceIds[0] ?? "";
+    const ctxEntry = this.ctxMap.get(firstDeviceId);
+    if (!ctxEntry) return 0;
+    const raw = ctxEntry.ctx.currentTime - entry.startCtxTime + entry.startOffset;
+    return entry.duration > 0 ? raw % entry.duration : 0;
+  }
+  async seek(id, offset) {
+    const entry = this.playing.get(id);
+    if (!entry) return;
+    const mp3Loop = entry.devices.values().next().value?.source.loop ?? false;
+    if (entry.fallbackTimeoutId !== void 0) clearTimeout(entry.fallbackTimeoutId);
+    for (const { source, gainNode } of entry.devices.values()) {
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+      }
+      gainNode.disconnect();
+    }
+    const firstDeviceId = this.activeDeviceIds[0] ?? "";
+    const firstCtxEntry = await this.getCtxEntry(firstDeviceId);
+    const buffer = entry.buffer;
+    const newDevices = /* @__PURE__ */ new Map();
+    const clampedOffset = Math.max(0, Math.min(offset, entry.duration - 0.01));
+    for (const deviceId of this.activeDeviceIds) {
+      const { ctx, masterGain } = await this.getCtxEntry(deviceId);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = entry.itemVolume;
+      gainNode.connect(masterGain);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = mp3Loop;
+      source.connect(gainNode);
+      newDevices.set(deviceId, { source, gainNode });
+    }
+    entry.devices = newDevices;
+    entry.startCtxTime = firstCtxEntry.ctx.currentTime;
+    entry.startOffset = clampedOffset;
+    if (!mp3Loop) {
+      const firstDevice = newDevices.get(firstDeviceId);
+      if (firstDevice) {
+        firstDevice.source.onended = () => {
+          if (!this.playing.has(id)) return;
+          this.playing.delete(id);
+          for (const [dId, dev] of newDevices.entries()) {
+            if (dId !== firstDeviceId) {
+              try {
+                dev.source.stop();
+              } catch {
+              }
+              dev.gainNode.disconnect();
+            }
+          }
+          firstDevice.gainNode.disconnect();
+          this.notifyEnded(id);
+        };
+      }
+    }
+    for (const { source } of newDevices.values()) {
+      source.start(0, clampedOffset);
+    }
+    if (!mp3Loop) {
+      const remainingMs = (entry.duration - clampedOffset + 2) * 1e3;
+      entry.fallbackTimeoutId = window.setTimeout(() => {
+        if (!this.playing.has(id)) return;
+        this.playing.delete(id);
+        this.notifyEnded(id);
+      }, remainingMs);
+    }
   }
 }
 const audioManager = new AudioManager();
@@ -12871,6 +13142,7 @@ function useShortcutListener() {
     window.api.shortcut.sync(keybindMap);
   }, [mp3s]);
   const triggerByKey = reactExports.useCallback((key) => {
+    if (!useSettingsStore.getState().settings.keybindEnabled) return;
     const keybindMap = getKeybindMap(useMp3Store.getState().mp3s);
     const ids = keybindMap[key] ?? [];
     if (ids.length === 0) return;
@@ -12879,6 +13151,10 @@ function useShortcutListener() {
     for (const id of ids) {
       const mp3 = currentMp3s.find((m) => m.id === id);
       if (!mp3) continue;
+      if (mp3.isPlaying && (mp3.restart ?? false)) {
+        audioManager.seek(mp3.id, 0);
+        continue;
+      }
       audioManager.play(mp3, currentSettings).then((started) => {
         if (started) setPlaying(id, true);
       });
@@ -12899,10 +13175,30 @@ function useShortcutListener() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [triggerByKey]);
 }
+function getAudioDuration(filePath) {
+  return window.api.readFileBuffer(filePath).then((data) => {
+    return new Promise((resolve) => {
+      const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      const blob = new Blob([ab], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio();
+      audio.preload = "metadata";
+      audio.src = url;
+      audio.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(audio.duration);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(0);
+      };
+    });
+  }).catch(() => 0);
+}
 async function addAndLoadDurations(filePaths, targetPresetId, addMp3s, setDuration) {
   const newItems = addMp3s(filePaths, targetPresetId);
   for (const item2 of newItems) {
-    const dur = await audioManager.updateDuration(item2);
+    const dur = await getAudioDuration(item2.filePath);
     if (dur > 0) setDuration(item2.id, dur);
   }
 }
@@ -12958,20 +13254,85 @@ class RandomQueueManager {
   activePresetId = null;
   sourceIds = [];
   isActive = false;
+  currentPlayingId = null;
+  playedHistory = [];
+  // 戻る用スタック [oldest ... newest]
+  futureQueue = [];
+  // 進む用スタック [oldest ... newest(=直前に戻った曲)]
   start(presetId, mp3Ids) {
     this.activePresetId = presetId;
     this.sourceIds = [...mp3Ids];
     this.queue = shuffle(mp3Ids);
     this.isActive = true;
+    this.currentPlayingId = null;
+    this.playedHistory = [];
+    this.futureQueue = [];
   }
   stop() {
     this.isActive = false;
     this.activePresetId = null;
     this.queue = [];
     this.sourceIds = [];
+    this.currentPlayingId = null;
+    this.playedHistory = [];
+    this.futureQueue = [];
   }
+  setCurrentPlaying(id) {
+    if (this.currentPlayingId !== null) {
+      this.playedHistory.push(this.currentPlayingId);
+      if (this.playedHistory.length > 50) this.playedHistory.shift();
+    }
+    this.currentPlayingId = id;
+  }
+  /** 後ろ向き再生専用 — 履歴を変更しない */
+  setCurrentPlayingBack(id) {
+    this.currentPlayingId = id;
+  }
+  /**
+   * 次トラック再生前に呼ぶ。
+   * 現在曲を playedHistory に積んで currentPlayingId を null にする。
+   * これにより onEnded の二重発火を防ぎつつ、戻る履歴も正しく保持する。
+   */
+  prepareForNextTrack() {
+    if (this.currentPlayingId !== null) {
+      this.playedHistory.push(this.currentPlayingId);
+      if (this.playedHistory.length > 50) this.playedHistory.shift();
+      this.currentPlayingId = null;
+    }
+  }
+  clearCurrentPlaying() {
+    this.currentPlayingId = null;
+  }
+  clearFutureQueue() {
+    this.futureQueue = [];
+  }
+  isCurrentRandom(id) {
+    return this.currentPlayingId === id;
+  }
+  getCurrentPlayingId() {
+    return this.currentPlayingId;
+  }
+  /** 前の曲を返す。現在曲を futureQueue に積んでから history をポップする。 */
+  getPrevious() {
+    if (this.playedHistory.length === 0) return null;
+    if (this.currentPlayingId !== null) {
+      this.futureQueue.push(this.currentPlayingId);
+    }
+    return this.playedHistory.pop();
+  }
+  hasPrevious() {
+    return this.playedHistory.length > 0;
+  }
+  /**
+   * 次の曲を返す。
+   * futureQueue に曲がある場合はそちらを優先する（⏮ 後に⏭ で同じ曲に戻る挙動）。
+   * なければシャッフルキューから取り出す。
+   */
   getNext() {
     if (!this.isActive || this.sourceIds.length === 0) return null;
+    if (this.futureQueue.length > 0) {
+      return this.futureQueue.pop();
+    }
     if (this.queue.length === 0) {
       this.queue = shuffle(this.sourceIds);
     }
@@ -12985,99 +13346,1086 @@ class RandomQueueManager {
   }
 }
 const randomQueueManager = new RandomQueueManager();
+const useRandomStore = create((set) => ({
+  currentRandomPlayingId: null,
+  setCurrentRandomPlayingId: (id) => set({ currentRandomPlayingId: id }),
+  isRandomActive: false,
+  randomPresetName: "",
+  setRandomActive: (active2, presetName = "") => set({ isRandomActive: active2, randomPresetName: presetName }),
+  randomLoadingId: null,
+  setRandomLoadingId: (id) => set({ randomLoadingId: id })
+}));
+function playNextRandom() {
+  const nextId = randomQueueManager.getNext();
+  if (!nextId) {
+    randomQueueManager.clearCurrentPlaying();
+    useRandomStore.getState().setCurrentRandomPlayingId(null);
+    useRandomStore.getState().setRandomLoadingId(null);
+    return;
+  }
+  const mp3 = useMp3Store.getState().mp3s.find((m) => m.id === nextId);
+  if (!mp3) {
+    randomQueueManager.clearCurrentPlaying();
+    useRandomStore.getState().setCurrentRandomPlayingId(null);
+    useRandomStore.getState().setRandomLoadingId(null);
+    return;
+  }
+  const settings = useSettingsStore.getState().settings;
+  randomQueueManager.setCurrentPlaying(nextId);
+  useRandomStore.getState().setCurrentRandomPlayingId(nextId);
+  useRandomStore.getState().setRandomLoadingId(nextId);
+  audioManager.play(mp3, settings).then((started) => {
+    useRandomStore.getState().setRandomLoadingId(null);
+    if (started) {
+      useMp3Store.getState().setPlaying(nextId, true);
+    } else if (started === false) {
+      playNextRandom();
+    }
+  });
+}
 function useAudioEnded() {
   const setPlaying = useMp3Store((s) => s.setPlaying);
   reactExports.useEffect(() => {
     const off = audioManager.onEnded((id) => {
       setPlaying(id, false);
       if (!randomQueueManager.active) return;
-      const nextId = randomQueueManager.getNext();
-      if (!nextId) return;
-      const mp3s = useMp3Store.getState().mp3s;
-      const mp3 = mp3s.find((m) => m.id === nextId);
-      if (!mp3) return;
-      const settings = useSettingsStore.getState().settings;
-      audioManager.play(mp3, settings).then((started) => {
-        if (started) useMp3Store.getState().setPlaying(nextId, true);
-      });
+      if (!randomQueueManager.isCurrentRandom(id)) return;
+      randomQueueManager.clearFutureQueue();
+      playNextRandom();
     });
     return off;
   }, [setPlaying]);
 }
-const header$2 = "_header_1tuov_1";
-const title = "_title_1tuov_13";
-const icon = "_icon_1tuov_23";
-const controls = "_controls_1tuov_28";
-const deviceSelect = "_deviceSelect_1tuov_35";
-const settingsBtn = "_settingsBtn_1tuov_51";
-const styles$7 = {
+function makeDistortionCurve(drive) {
+  const n = 512;
+  const curve = new Float32Array(new ArrayBuffer(n * 4));
+  const k = Math.max(drive * drive * 0.04, 1e-3);
+  for (let i = 0; i < n; i++) {
+    const x = i * 2 / n - 1;
+    curve[i] = (Math.PI + k) * x / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+function buildImpulse(ctx, duration2, decay) {
+  const len = Math.floor(ctx.sampleRate * duration2);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return buf;
+}
+function toneToFreq(tone) {
+  return 500 * Math.pow(40, tone / 100);
+}
+class MicManager {
+  ctxMap = /* @__PURE__ */ new Map();
+  analyser = null;
+  stream = null;
+  currentGain = 1;
+  isMuted = false;
+  ptkMuted = false;
+  // Cached params (re-applied after restart)
+  pitchSemitones = 0;
+  formantSemitones = 0;
+  eqLow = 0;
+  eqMid = 0;
+  eqHigh = 0;
+  compressorEnabled = false;
+  compressorThreshold = -24;
+  compressorRatio = 12;
+  compressorAttack = 3;
+  compressorRelease = 100;
+  echoEnabled = false;
+  echoDelay = 200;
+  echoFeedback = 40;
+  echoMix = 50;
+  radioEnabled = false;
+  reverbEnabled = false;
+  reverbDuration = 1.5;
+  reverbDecay = 2;
+  reverbMix = 40;
+  robotEnabled = false;
+  robotFrequency = 100;
+  distortionEnabled = false;
+  distortionDrive = 50;
+  distortionMix = 80;
+  distortionTone = 70;
+  effectiveGain() {
+    return this.ptkMuted || this.isMuted ? 0 : this.currentGain;
+  }
+  /** distortionEnabled の状態に応じた dry/wet ゲイン値を返す。 */
+  distGains() {
+    if (!this.distortionEnabled) return { dry: 1, wet: 0, pre: 1 };
+    const wet = this.distortionMix / 100;
+    const dry = 1 - wet;
+    const pre = 1 + this.distortionDrive * 0.3;
+    return { dry, wet, pre };
+  }
+  async enumerateDevices() {
+    await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
+    });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((d) => d.kind === "audioinput");
+  }
+  async start(micDeviceId, outputDeviceIds, inputGain) {
+    this.stop();
+    this.currentGain = inputGain;
+    const constraints = {
+      audio: {
+        ...micDeviceId ? { deviceId: { exact: micDeviceId } } : {},
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    };
+    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const workletUrl = new URL("./worklets/PitchFormantProcessor.js", window.location.href).href;
+    const targetDevices = outputDeviceIds.length > 0 ? outputDeviceIds : [""];
+    let isFirst = true;
+    for (const deviceId of targetDevices) {
+      const ctx = new AudioContext();
+      if (deviceId && "setSinkId" in ctx) {
+        await ctx.setSinkId(deviceId);
+      }
+      let pitchNode = null;
+      try {
+        await ctx.audioWorklet.addModule(workletUrl);
+        pitchNode = new AudioWorkletNode(ctx, "pitch-formant-processor");
+        pitchNode.port.postMessage({ pitch: this.pitchSemitones, formant: this.formantSemitones });
+      } catch {
+      }
+      const lowFilter = ctx.createBiquadFilter();
+      lowFilter.type = "lowshelf";
+      lowFilter.frequency.value = 250;
+      lowFilter.gain.value = this.eqLow;
+      const midFilter = ctx.createBiquadFilter();
+      midFilter.type = "peaking";
+      midFilter.frequency.value = 1e3;
+      midFilter.Q.value = 1;
+      midFilter.gain.value = this.eqMid;
+      const highFilter = ctx.createBiquadFilter();
+      highFilter.type = "highshelf";
+      highFilter.frequency.value = 4e3;
+      highFilter.gain.value = this.eqHigh;
+      const echoDryGain = ctx.createGain();
+      echoDryGain.gain.value = this.echoEnabled ? (100 - this.echoMix) / 100 : 1;
+      const echoDelayNode = ctx.createDelay(2);
+      echoDelayNode.delayTime.value = this.echoDelay / 1e3;
+      const echoFeedbackGain = ctx.createGain();
+      echoFeedbackGain.gain.value = this.echoFeedback / 100;
+      const echoWetGain = ctx.createGain();
+      echoWetGain.gain.value = this.echoEnabled ? this.echoMix / 100 : 0;
+      const radioBypassGain = ctx.createGain();
+      radioBypassGain.gain.value = this.radioEnabled ? 0 : 1;
+      const radioHighpass = ctx.createBiquadFilter();
+      radioHighpass.type = "highpass";
+      radioHighpass.frequency.value = 300;
+      const radioLowpass = ctx.createBiquadFilter();
+      radioLowpass.type = "lowpass";
+      radioLowpass.frequency.value = 3e3;
+      const radioWetGain = ctx.createGain();
+      radioWetGain.gain.value = this.radioEnabled ? 1 : 0;
+      const { dry, wet, pre } = this.distGains();
+      const distDryGain = ctx.createGain();
+      distDryGain.gain.value = dry;
+      const distPreGain = ctx.createGain();
+      distPreGain.gain.value = pre;
+      const waveshaper = ctx.createWaveShaper();
+      waveshaper.curve = makeDistortionCurve(this.distortionEnabled ? this.distortionDrive : 0);
+      waveshaper.oversample = "4x";
+      const distToneFilter = ctx.createBiquadFilter();
+      distToneFilter.type = "lowpass";
+      distToneFilter.frequency.value = toneToFreq(this.distortionTone);
+      const distWetGain = ctx.createGain();
+      distWetGain.gain.value = wet;
+      const reverbDryGain = ctx.createGain();
+      reverbDryGain.gain.value = this.reverbEnabled ? (100 - this.reverbMix) / 100 : 1;
+      const reverbConvolver = ctx.createConvolver();
+      reverbConvolver.buffer = buildImpulse(ctx, this.reverbDuration, this.reverbDecay);
+      const reverbWetGain = ctx.createGain();
+      reverbWetGain.gain.value = this.reverbEnabled ? this.reverbMix / 100 : 0;
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = this.compressorEnabled ? this.compressorThreshold : 0;
+      compressor.knee.value = 30;
+      compressor.ratio.value = this.compressorRatio;
+      compressor.attack.value = this.compressorAttack / 1e3;
+      compressor.release.value = this.compressorRelease / 1e3;
+      const robotBypassGain = ctx.createGain();
+      robotBypassGain.gain.value = this.robotEnabled ? 0 : 1;
+      const robotRingModGain = ctx.createGain();
+      const robotOscillator = ctx.createOscillator();
+      robotOscillator.type = "sine";
+      robotOscillator.frequency.value = this.robotFrequency;
+      robotOscillator.connect(robotRingModGain.gain);
+      robotOscillator.start();
+      const robotWetGain = ctx.createGain();
+      robotWetGain.gain.value = this.robotEnabled ? 1 : 0;
+      const source = ctx.createMediaStreamSource(this.stream);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = this.effectiveGain();
+      source.connect(robotBypassGain);
+      source.connect(robotRingModGain);
+      robotRingModGain.connect(robotWetGain);
+      robotBypassGain.connect(gainNode);
+      robotWetGain.connect(gainNode);
+      let lastNode = gainNode;
+      if (pitchNode) {
+        gainNode.connect(pitchNode);
+        lastNode = pitchNode;
+      }
+      lastNode.connect(lowFilter);
+      lowFilter.connect(midFilter);
+      midFilter.connect(highFilter);
+      highFilter.connect(echoDryGain);
+      highFilter.connect(echoDelayNode);
+      echoDelayNode.connect(echoFeedbackGain);
+      echoFeedbackGain.connect(echoDelayNode);
+      echoDelayNode.connect(echoWetGain);
+      echoDryGain.connect(radioBypassGain);
+      echoDryGain.connect(radioHighpass);
+      echoWetGain.connect(radioBypassGain);
+      echoWetGain.connect(radioHighpass);
+      radioHighpass.connect(radioLowpass);
+      radioLowpass.connect(radioWetGain);
+      radioBypassGain.connect(distDryGain);
+      radioBypassGain.connect(distPreGain);
+      radioWetGain.connect(distDryGain);
+      radioWetGain.connect(distPreGain);
+      distPreGain.connect(waveshaper);
+      waveshaper.connect(distToneFilter);
+      distToneFilter.connect(distWetGain);
+      distDryGain.connect(reverbDryGain);
+      distDryGain.connect(reverbConvolver);
+      distWetGain.connect(reverbDryGain);
+      distWetGain.connect(reverbConvolver);
+      reverbConvolver.connect(reverbWetGain);
+      reverbDryGain.connect(compressor);
+      reverbWetGain.connect(compressor);
+      compressor.connect(ctx.destination);
+      if (isFirst) {
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        gainNode.connect(analyser);
+        this.analyser = analyser;
+        isFirst = false;
+      }
+      this.ctxMap.set(deviceId, {
+        ctx,
+        source,
+        gainNode,
+        pitchNode,
+        robotBypassGain,
+        robotRingModGain,
+        robotOscillator,
+        robotWetGain,
+        lowFilter,
+        midFilter,
+        highFilter,
+        echoDryGain,
+        echoDelayNode,
+        echoFeedbackGain,
+        echoWetGain,
+        radioBypassGain,
+        radioHighpass,
+        radioLowpass,
+        radioWetGain,
+        distDryGain,
+        distPreGain,
+        waveshaper,
+        distToneFilter,
+        distWetGain,
+        reverbDryGain,
+        reverbConvolver,
+        reverbWetGain,
+        compressor
+      });
+    }
+  }
+  stop() {
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
+    for (const { ctx } of this.ctxMap.values()) ctx.close().catch(() => {
+    });
+    this.ctxMap.clear();
+    this.analyser = null;
+  }
+  isRunning() {
+    return this.stream !== null;
+  }
+  setGain(gain) {
+    this.currentGain = gain;
+    const value = this.effectiveGain();
+    for (const { gainNode } of this.ctxMap.values()) gainNode.gain.value = value;
+  }
+  setMuted(muted) {
+    this.isMuted = muted;
+    const value = this.effectiveGain();
+    for (const { gainNode } of this.ctxMap.values()) gainNode.gain.value = value;
+  }
+  setPtkMuted(muted) {
+    this.ptkMuted = muted;
+    const value = this.effectiveGain();
+    for (const { gainNode } of this.ctxMap.values()) gainNode.gain.value = value;
+  }
+  setPitch(semitones) {
+    this.pitchSemitones = semitones;
+    for (const { pitchNode } of this.ctxMap.values()) pitchNode?.port.postMessage({ pitch: semitones });
+  }
+  setFormant(semitones) {
+    this.formantSemitones = semitones;
+    for (const { pitchNode } of this.ctxMap.values()) pitchNode?.port.postMessage({ formant: semitones });
+  }
+  setEqBand(band, gainDb) {
+    if (band === "low") this.eqLow = gainDb;
+    else if (band === "mid") this.eqMid = gainDb;
+    else this.eqHigh = gainDb;
+    for (const entry of this.ctxMap.values()) {
+      if (band === "low") entry.lowFilter.gain.value = gainDb;
+      else if (band === "mid") entry.midFilter.gain.value = gainDb;
+      else entry.highFilter.gain.value = gainDb;
+    }
+  }
+  setCompressorEnabled(enabled) {
+    this.compressorEnabled = enabled;
+    for (const { compressor } of this.ctxMap.values()) {
+      compressor.threshold.value = enabled ? this.compressorThreshold : 0;
+      compressor.ratio.value = this.compressorRatio;
+      compressor.attack.value = this.compressorAttack / 1e3;
+      compressor.release.value = this.compressorRelease / 1e3;
+    }
+  }
+  setCompressorThreshold(threshold) {
+    this.compressorThreshold = threshold;
+    if (this.compressorEnabled) {
+      for (const { compressor } of this.ctxMap.values()) compressor.threshold.value = threshold;
+    }
+  }
+  setCompressorRatio(ratio) {
+    this.compressorRatio = ratio;
+    for (const { compressor } of this.ctxMap.values()) compressor.ratio.value = ratio;
+  }
+  setCompressorAttack(ms) {
+    this.compressorAttack = ms;
+    for (const { compressor } of this.ctxMap.values()) compressor.attack.value = ms / 1e3;
+  }
+  setCompressorRelease(ms) {
+    this.compressorRelease = ms;
+    for (const { compressor } of this.ctxMap.values()) compressor.release.value = ms / 1e3;
+  }
+  setDistortionEnabled(enabled) {
+    this.distortionEnabled = enabled;
+    this._applyDistortion();
+  }
+  setDistortionDrive(drive) {
+    this.distortionDrive = drive;
+    if (this.distortionEnabled) this._applyDistortion();
+  }
+  setDistortionMix(mix) {
+    this.distortionMix = mix;
+    if (this.distortionEnabled) this._applyDistortion();
+  }
+  setDistortionTone(tone) {
+    this.distortionTone = tone;
+    const freq = toneToFreq(tone);
+    for (const { distToneFilter } of this.ctxMap.values()) distToneFilter.frequency.value = freq;
+  }
+  setEchoEnabled(enabled) {
+    this.echoEnabled = enabled;
+    for (const entry of this.ctxMap.values()) {
+      entry.echoDryGain.gain.value = enabled ? (100 - this.echoMix) / 100 : 1;
+      entry.echoWetGain.gain.value = enabled ? this.echoMix / 100 : 0;
+    }
+  }
+  setEchoDelay(ms) {
+    this.echoDelay = ms;
+    for (const { echoDelayNode } of this.ctxMap.values()) echoDelayNode.delayTime.value = ms / 1e3;
+  }
+  setEchoFeedback(pct) {
+    this.echoFeedback = pct;
+    for (const { echoFeedbackGain } of this.ctxMap.values()) echoFeedbackGain.gain.value = pct / 100;
+  }
+  setEchoMix(pct) {
+    this.echoMix = pct;
+    if (this.echoEnabled) {
+      for (const entry of this.ctxMap.values()) {
+        entry.echoDryGain.gain.value = (100 - pct) / 100;
+        entry.echoWetGain.gain.value = pct / 100;
+      }
+    }
+  }
+  setRadioEnabled(enabled) {
+    this.radioEnabled = enabled;
+    for (const entry of this.ctxMap.values()) {
+      entry.radioBypassGain.gain.value = enabled ? 0 : 1;
+      entry.radioWetGain.gain.value = enabled ? 1 : 0;
+    }
+  }
+  setReverbEnabled(enabled) {
+    this.reverbEnabled = enabled;
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbDryGain.gain.value = enabled ? (100 - this.reverbMix) / 100 : 1;
+      entry.reverbWetGain.gain.value = enabled ? this.reverbMix / 100 : 0;
+    }
+  }
+  setReverbDuration(seconds) {
+    this.reverbDuration = seconds;
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbConvolver.buffer = buildImpulse(entry.ctx, seconds, this.reverbDecay);
+    }
+  }
+  setReverbDecay(decay) {
+    this.reverbDecay = decay;
+    for (const entry of this.ctxMap.values()) {
+      entry.reverbConvolver.buffer = buildImpulse(entry.ctx, this.reverbDuration, decay);
+    }
+  }
+  setReverbMix(pct) {
+    this.reverbMix = pct;
+    if (this.reverbEnabled) {
+      for (const entry of this.ctxMap.values()) {
+        entry.reverbDryGain.gain.value = (100 - pct) / 100;
+        entry.reverbWetGain.gain.value = pct / 100;
+      }
+    }
+  }
+  setRobotEnabled(enabled) {
+    this.robotEnabled = enabled;
+    for (const entry of this.ctxMap.values()) {
+      entry.robotBypassGain.gain.value = enabled ? 0 : 1;
+      entry.robotWetGain.gain.value = enabled ? 1 : 0;
+    }
+  }
+  setRobotFrequency(freq) {
+    this.robotFrequency = freq;
+    for (const { robotOscillator } of this.ctxMap.values()) robotOscillator.frequency.value = freq;
+  }
+  _applyDistortion() {
+    const { dry, wet, pre } = this.distGains();
+    const curve = makeDistortionCurve(this.distortionEnabled ? this.distortionDrive : 0);
+    for (const entry of this.ctxMap.values()) {
+      entry.distDryGain.gain.value = dry;
+      entry.distWetGain.gain.value = wet;
+      entry.distPreGain.gain.value = pre;
+      entry.waveshaper.curve = curve;
+    }
+  }
+  getAnalyser() {
+    return this.analyser;
+  }
+}
+const micManager = new MicManager();
+function matchesBind(e, bind) {
+  if (!bind) return false;
+  const parts = bind.split("+");
+  const mainKey = parts[parts.length - 1] === "Space" ? " " : parts[parts.length - 1];
+  return e.key === mainKey && e.ctrlKey === parts.includes("Ctrl") && e.altKey === parts.includes("Alt") && e.shiftKey === parts.includes("Shift");
+}
+function useMicController() {
+  const settings = useSettingsStore((s) => s.settings);
+  reactExports.useEffect(() => {
+    micManager.start(settings.micDeviceId, settings.outputDeviceIds, settings.micInputGain).then(() => {
+      micManager.setPtkMuted(settings.micPushToKey);
+      micManager.setPitch(settings.micPitchSemitones);
+      micManager.setFormant(settings.micFormantSemitones);
+      micManager.setEqBand("low", settings.micEqLow);
+      micManager.setEqBand("mid", settings.micEqMid);
+      micManager.setEqBand("high", settings.micEqHigh);
+      micManager.setCompressorEnabled(settings.micCompressorEnabled);
+      micManager.setCompressorThreshold(settings.micCompressorThreshold);
+      micManager.setCompressorRatio(settings.micCompressorRatio);
+      micManager.setCompressorAttack(settings.micCompressorAttack);
+      micManager.setCompressorRelease(settings.micCompressorRelease);
+      micManager.setEchoEnabled(settings.micEchoEnabled);
+      micManager.setEchoDelay(settings.micEchoDelay);
+      micManager.setEchoFeedback(settings.micEchoFeedback);
+      micManager.setEchoMix(settings.micEchoMix);
+      micManager.setRadioEnabled(settings.micRadioEnabled);
+      micManager.setReverbEnabled(settings.micReverbEnabled);
+      micManager.setReverbDuration(settings.micReverbDuration);
+      micManager.setReverbDecay(settings.micReverbDecay);
+      micManager.setReverbMix(settings.micReverbMix);
+      micManager.setRobotEnabled(settings.micRobotEnabled);
+      micManager.setRobotFrequency(settings.micRobotFrequency);
+      micManager.setDistortionEnabled(settings.micDistortionEnabled);
+      micManager.setDistortionDrive(settings.micDistortionDrive);
+      micManager.setDistortionMix(settings.micDistortionMix);
+      micManager.setDistortionTone(settings.micDistortionTone);
+    }).catch(() => {
+    });
+    return () => micManager.stop();
+  }, [settings.micDeviceId, settings.outputDeviceIds.join(",")]);
+  reactExports.useEffect(() => {
+    micManager.setPitch(settings.micPitchSemitones);
+  }, [settings.micPitchSemitones]);
+  reactExports.useEffect(() => {
+    micManager.setFormant(settings.micFormantSemitones);
+  }, [settings.micFormantSemitones]);
+  reactExports.useEffect(() => {
+    micManager.setEqBand("low", settings.micEqLow);
+  }, [settings.micEqLow]);
+  reactExports.useEffect(() => {
+    micManager.setEqBand("mid", settings.micEqMid);
+  }, [settings.micEqMid]);
+  reactExports.useEffect(() => {
+    micManager.setEqBand("high", settings.micEqHigh);
+  }, [settings.micEqHigh]);
+  reactExports.useEffect(() => {
+    micManager.setCompressorEnabled(settings.micCompressorEnabled);
+  }, [settings.micCompressorEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setCompressorThreshold(settings.micCompressorThreshold);
+  }, [settings.micCompressorThreshold]);
+  reactExports.useEffect(() => {
+    micManager.setCompressorRatio(settings.micCompressorRatio);
+  }, [settings.micCompressorRatio]);
+  reactExports.useEffect(() => {
+    micManager.setCompressorAttack(settings.micCompressorAttack);
+  }, [settings.micCompressorAttack]);
+  reactExports.useEffect(() => {
+    micManager.setCompressorRelease(settings.micCompressorRelease);
+  }, [settings.micCompressorRelease]);
+  reactExports.useEffect(() => {
+    micManager.setEchoEnabled(settings.micEchoEnabled);
+  }, [settings.micEchoEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setEchoDelay(settings.micEchoDelay);
+  }, [settings.micEchoDelay]);
+  reactExports.useEffect(() => {
+    micManager.setEchoFeedback(settings.micEchoFeedback);
+  }, [settings.micEchoFeedback]);
+  reactExports.useEffect(() => {
+    micManager.setEchoMix(settings.micEchoMix);
+  }, [settings.micEchoMix]);
+  reactExports.useEffect(() => {
+    micManager.setRadioEnabled(settings.micRadioEnabled);
+  }, [settings.micRadioEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setReverbEnabled(settings.micReverbEnabled);
+  }, [settings.micReverbEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setReverbDuration(settings.micReverbDuration);
+  }, [settings.micReverbDuration]);
+  reactExports.useEffect(() => {
+    micManager.setReverbDecay(settings.micReverbDecay);
+  }, [settings.micReverbDecay]);
+  reactExports.useEffect(() => {
+    micManager.setReverbMix(settings.micReverbMix);
+  }, [settings.micReverbMix]);
+  reactExports.useEffect(() => {
+    micManager.setRobotEnabled(settings.micRobotEnabled);
+  }, [settings.micRobotEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setRobotFrequency(settings.micRobotFrequency);
+  }, [settings.micRobotFrequency]);
+  reactExports.useEffect(() => {
+    micManager.setDistortionEnabled(settings.micDistortionEnabled);
+  }, [settings.micDistortionEnabled]);
+  reactExports.useEffect(() => {
+    micManager.setDistortionDrive(settings.micDistortionDrive);
+  }, [settings.micDistortionDrive]);
+  reactExports.useEffect(() => {
+    micManager.setDistortionMix(settings.micDistortionMix);
+  }, [settings.micDistortionMix]);
+  reactExports.useEffect(() => {
+    micManager.setDistortionTone(settings.micDistortionTone);
+  }, [settings.micDistortionTone]);
+  reactExports.useEffect(() => {
+    micManager.setPtkMuted(settings.micPushToKey);
+  }, [settings.micPushToKey]);
+  reactExports.useEffect(() => {
+    if (settings.micPushToKeyBind) {
+      window.api.ptk.setKey(settings.micPushToKeyBind).catch(() => {
+      });
+    }
+  }, [settings.micPushToKeyBind]);
+  reactExports.useEffect(() => {
+    if (!settings.micPushToKey || !settings.micPushToKeyBind) return;
+    const bind = settings.micPushToKeyBind;
+    const onDown = (e) => {
+      if (matchesBind(e, bind)) micManager.setPtkMuted(false);
+    };
+    const onUp = (e) => {
+      if (matchesBind(e, bind)) micManager.setPtkMuted(true);
+    };
+    document.addEventListener("keydown", onDown);
+    document.addEventListener("keyup", onUp);
+    return () => {
+      document.removeEventListener("keydown", onDown);
+      document.removeEventListener("keyup", onUp);
+    };
+  }, [settings.micPushToKey, settings.micPushToKeyBind]);
+  reactExports.useEffect(() => {
+    if (!settings.micPushToKey) return;
+    const offDown = window.api.ptk.onKeyDown(() => micManager.setPtkMuted(false));
+    const offUp = window.api.ptk.onKeyUp(() => micManager.setPtkMuted(true));
+    return () => {
+      offDown();
+      offUp();
+    };
+  }, [settings.micPushToKey]);
+}
+const header$2 = "_header_m7030_1";
+const title = "_title_m7030_25";
+const icon = "_icon_m7030_45";
+const controls = "_controls_m7030_55";
+const deviceDropdown = "_deviceDropdown_m7030_69";
+const deviceTrigger = "_deviceTrigger_m7030_77";
+const deviceTriggerOpen = "_deviceTriggerOpen_m7030_111";
+const deviceLabel = "_deviceLabel_m7030_121";
+const deviceCaret = "_deviceCaret_m7030_137";
+const deviceMenu = "_deviceMenu_m7030_149";
+const deviceItem = "_deviceItem_m7030_179";
+const deviceItemLabel = "_deviceItemLabel_m7030_215";
+const deviceControls = "_deviceControls_m7030_231";
+const micIconWrapper = "_micIconWrapper_m7030_247";
+const micIconMuted = "_micIconMuted_m7030_271";
+const micIconActive = "_micIconActive_m7030_279";
+const volumeIcon = "_volumeIcon_m7030_311";
+const deviceSlider = "_deviceSlider_m7030_327";
+const deviceValue = "_deviceValue_m7030_341";
+const settingsBtn = "_settingsBtn_m7030_357";
+const styles$8 = {
   header: header$2,
   title,
   icon,
   controls,
-  deviceSelect,
+  deviceDropdown,
+  deviceTrigger,
+  deviceTriggerOpen,
+  deviceLabel,
+  deviceCaret,
+  deviceMenu,
+  deviceItem,
+  deviceItemLabel,
+  deviceControls,
+  micIconWrapper,
+  micIconMuted,
+  micIconActive,
+  volumeIcon,
+  deviceSlider,
+  deviceValue,
   settingsBtn
 };
 function Header({ onSettingsClick }) {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const [devices, setDevices] = reactExports.useState([]);
+  const [audioDevices, setAudioDevices] = reactExports.useState([]);
+  const [micDevices, setMicDevices] = reactExports.useState([]);
+  const [audioOpen, setAudioOpen] = reactExports.useState(false);
+  const [micOpen, setMicOpen] = reactExports.useState(false);
+  const [masterMuted, setMasterMuted] = reactExports.useState(false);
+  const [micActive, setMicActive] = reactExports.useState(false);
+  const premuteVolume = reactExports.useRef(settings.masterVolume);
+  const preMuteMicGain = reactExports.useRef(settings.micInputGain);
+  const audioDropdownRef = reactExports.useRef(null);
+  const micDropdownRef = reactExports.useRef(null);
+  const micActiveTimer = reactExports.useRef(null);
+  const micRafId = reactExports.useRef(0);
   reactExports.useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then((all) => {
-      setDevices(all.filter((d) => d.kind === "audiooutput"));
+      setAudioDevices(all.filter((d) => d.kind === "audiooutput"));
     });
+    micManager.enumerateDevices().then(setMicDevices);
   }, []);
-  const onDeviceChange = (deviceId) => {
-    updateSettings({ outputDeviceId: deviceId });
-    audioManager.setOutputDevice(deviceId);
+  reactExports.useEffect(() => {
+    const THRESHOLD = 0.01;
+    const HOLD_MS = 80;
+    const tick = () => {
+      const analyser = micManager.getAnalyser();
+      if (analyser && !settings.micMuted) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteTimeDomainData(data);
+        let peak = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = Math.abs(data[i] - 128) / 128;
+          if (v > peak) peak = v;
+        }
+        if (peak > THRESHOLD) {
+          setMicActive(true);
+          if (micActiveTimer.current) clearTimeout(micActiveTimer.current);
+          micActiveTimer.current = setTimeout(() => setMicActive(false), HOLD_MS);
+        }
+      }
+      micRafId.current = requestAnimationFrame(tick);
+    };
+    micRafId.current = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(micRafId.current);
+      if (micActiveTimer.current) clearTimeout(micActiveTimer.current);
+    };
+  }, [settings.micMuted]);
+  reactExports.useEffect(() => {
+    if (!audioOpen) return;
+    const handler = (e) => {
+      if (audioDropdownRef.current && !audioDropdownRef.current.contains(e.target)) {
+        setAudioOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [audioOpen]);
+  reactExports.useEffect(() => {
+    if (!micOpen) return;
+    const handler = (e) => {
+      if (micDropdownRef.current && !micDropdownRef.current.contains(e.target)) {
+        setMicOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [micOpen]);
+  const selectedIds = settings.outputDeviceIds ?? [];
+  const handleVolumeChange = (e) => {
+    const vol = parseFloat(e.target.value);
+    if (masterMuted) setMasterMuted(false);
+    premuteVolume.current = vol;
+    updateSettings({ masterVolume: vol });
+    audioManager.setMasterVolume(vol);
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: styles$7.header, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$7.title, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$7.icon, children: "♪" }),
+  const toggleMasterMute = () => {
+    if (masterMuted) {
+      const vol = premuteVolume.current;
+      updateSettings({ masterVolume: vol });
+      audioManager.setMasterVolume(vol);
+      setMasterMuted(false);
+    } else {
+      premuteVolume.current = settings.masterVolume;
+      updateSettings({ masterVolume: 0 });
+      audioManager.setMasterVolume(0);
+      setMasterMuted(true);
+    }
+  };
+  const toggleAudioDevice = (deviceId) => {
+    randomQueueManager.stop();
+    useRandomStore.getState().setCurrentRandomPlayingId(null);
+    useRandomStore.getState().setRandomActive(false);
+    audioManager.stopAll();
+    const next = selectedIds.includes(deviceId) ? selectedIds.filter((id) => id !== deviceId) : [...selectedIds, deviceId];
+    updateSettings({ outputDeviceIds: next });
+    audioManager.setOutputDevices(next);
+  };
+  const handleMicMuteToggle = () => {
+    if (settings.micMuted) {
+      const gain = preMuteMicGain.current;
+      updateSettings({ micMuted: false, micInputGain: gain });
+      micManager.setMuted(false);
+      micManager.setGain(gain);
+    } else {
+      preMuteMicGain.current = settings.micInputGain;
+      updateSettings({ micMuted: true, micInputGain: 0 });
+      micManager.setMuted(true);
+    }
+  };
+  const handleMicGainChange = (e) => {
+    const gain = parseFloat(e.target.value);
+    updateSettings({ micInputGain: gain });
+    micManager.setGain(gain);
+  };
+  const handleMicDeviceChange = (deviceId) => {
+    updateSettings({ micDeviceId: deviceId });
+    setMicOpen(false);
+  };
+  const getAudioLabel = () => {
+    if (selectedIds.length === 0) return "指定なし";
+    const first = audioDevices.find((d) => d.deviceId === selectedIds[0]);
+    const firstName = first?.label || `デバイス (${selectedIds[0].slice(0, 8)})`;
+    return selectedIds.length === 1 ? firstName : `⊕ ${firstName}`;
+  };
+  const getMicLabel = () => {
+    if (!settings.micDeviceId) return "指定なし";
+    const dev = micDevices.find((d) => d.deviceId === settings.micDeviceId);
+    return dev?.label || `マイク (${settings.micDeviceId.slice(0, 8)})`;
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: styles$8.header, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.title, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.icon, children: "♪" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "NoiseRide" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$7.controls, children: [
-      devices.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "select",
-        {
-          className: styles$7.deviceSelect,
-          value: settings.outputDeviceId,
-          onChange: (e) => onDeviceChange(e.target.value),
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "システムデフォルト" }),
-            devices.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: d.deviceId, children: d.label || `デバイス (${d.deviceId.slice(0, 8)})` }, d.deviceId))
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$7.settingsBtn, onClick: onSettingsClick, title: "設定", children: "⚙" })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.controls, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.deviceControls, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            className: [
+              styles$8.micIconWrapper,
+              settings.micMuted ? styles$8.micIconMuted : "",
+              micActive ? styles$8.micIconActive : ""
+            ].join(" "),
+            onClick: handleMicMuteToggle,
+            title: settings.micMuted ? "マイクミュート解除" : "マイクミュート",
+            children: "🎤"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "range",
+            className: styles$8.deviceSlider,
+            min: 0,
+            max: 2,
+            step: 0.05,
+            value: settings.micInputGain,
+            onChange: handleMicGainChange,
+            title: `マイク入力ゲイン: ${Math.round(settings.micInputGain * 100)}%`
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$8.deviceValue, children: [
+          Math.round(settings.micInputGain * 100),
+          "%"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.deviceDropdown, ref: micDropdownRef, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              className: `${styles$8.deviceTrigger} ${micOpen ? styles$8.deviceTriggerOpen : ""}`,
+              onClick: () => setMicOpen((o) => !o),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceLabel, children: getMicLabel() }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceCaret, children: micOpen ? "▲" : "▼" })
+              ]
+            }
+          ),
+          micOpen && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.deviceMenu, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: styles$8.deviceItem, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  type: "radio",
+                  name: "micDevice",
+                  checked: !settings.micDeviceId,
+                  onChange: () => handleMicDeviceChange("")
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceItemLabel, children: "指定なし" })
+            ] }),
+            micDevices.map((d) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: styles$8.deviceItem, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  type: "radio",
+                  name: "micDevice",
+                  checked: settings.micDeviceId === d.deviceId,
+                  onChange: () => handleMicDeviceChange(d.deviceId)
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceItemLabel, children: d.label || `マイク (${d.deviceId.slice(0, 8)})` })
+            ] }, d.deviceId))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            className: styles$8.volumeIcon,
+            onClick: toggleMasterMute,
+            title: masterMuted ? "ミュート解除" : "ミュート",
+            children: masterMuted ? "🔇" : "🔊"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "range",
+            className: styles$8.deviceSlider,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            value: settings.masterVolume,
+            onChange: handleVolumeChange,
+            title: `マスター音量: ${Math.round(settings.masterVolume * 100)}%`
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$8.deviceValue, children: [
+          Math.round(settings.masterVolume * 100),
+          "%"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$8.deviceDropdown, ref: audioDropdownRef, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              className: `${styles$8.deviceTrigger} ${audioOpen ? styles$8.deviceTriggerOpen : ""}`,
+              onClick: () => setAudioOpen((o) => !o),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceLabel, children: getAudioLabel() }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceCaret, children: audioOpen ? "▲" : "▼" })
+              ]
+            }
+          ),
+          audioOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$8.deviceMenu, children: audioDevices.map((d) => {
+            const label2 = d.label || `デバイス (${d.deviceId.slice(0, 8)})`;
+            const checked = selectedIds.includes(d.deviceId);
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: styles$8.deviceItem, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  type: "checkbox",
+                  checked,
+                  onChange: () => toggleAudioDevice(d.deviceId)
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$8.deviceItemLabel, children: label2 })
+            ] }, d.deviceId);
+          }) })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$8.settingsBtn, onClick: onSettingsClick, title: "設定", children: "⚙" })
     ] })
   ] });
 }
-const tabBar = "_tabBar_1cda2_1";
-const tabs = "_tabs_1cda2_13";
-const tab = "_tab_1cda2_1";
-const active$1 = "_active_1cda2_40";
-const tabLabel = "_tabLabel_1cda2_50";
-const tabInput = "_tabInput_1cda2_55";
-const tabClose = "_tabClose_1cda2_64";
-const addTab = "_addTab_1cda2_82";
-const actions = "_actions_1cda2_101";
-const randomBtn = "_randomBtn_1cda2_108";
-const randomOn = "_randomOn_1cda2_125";
-const addFileBtn = "_addFileBtn_1cda2_131";
-const styles$6 = {
+function buildAccelerator$2(e) {
+  const parts = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  parts.push(e.key === " " ? "Space" : e.key);
+  return parts.join("+");
+}
+function useRandomControls() {
+  const settings = useSettingsStore((s) => s.settings);
+  const stopAll = reactExports.useCallback(() => {
+    if (randomQueueManager.active) {
+      randomQueueManager.stop();
+      useRandomStore.getState().setCurrentRandomPlayingId(null);
+      useRandomStore.getState().setRandomActive(false);
+      useRandomStore.getState().setRandomLoadingId(null);
+    }
+    audioManager.stopAll();
+    for (const id of useMp3Store.getState().mp3s.filter((m) => m.isPlaying).map((m) => m.id)) {
+      useMp3Store.getState().setPlaying(id, false);
+    }
+  }, []);
+  const playNext = reactExports.useCallback(() => {
+    if (useRandomStore.getState().randomLoadingId !== null) return;
+    const id = randomQueueManager.getCurrentPlayingId();
+    if (id) {
+      randomQueueManager.prepareForNextTrack();
+      useRandomStore.getState().setCurrentRandomPlayingId(null);
+      audioManager.stop(id);
+      useMp3Store.getState().setPlaying(id, false);
+    }
+    playNextRandom();
+  }, []);
+  const playPrev = reactExports.useCallback(() => {
+    if (useRandomStore.getState().randomLoadingId !== null) return;
+    if (!randomQueueManager.hasPrevious()) return;
+    const currentId = randomQueueManager.getCurrentPlayingId();
+    const prevId = randomQueueManager.getPrevious();
+    if (!prevId) return;
+    if (currentId) {
+      randomQueueManager.setCurrentPlayingBack(prevId);
+      useRandomStore.getState().setCurrentRandomPlayingId(prevId);
+      audioManager.stop(currentId);
+      useMp3Store.getState().setPlaying(currentId, false);
+    }
+    const mp3 = useMp3Store.getState().mp3s.find((m) => m.id === prevId);
+    if (!mp3) return;
+    useRandomStore.getState().setRandomLoadingId(prevId);
+    audioManager.play(mp3, useSettingsStore.getState().settings).then((started) => {
+      useRandomStore.getState().setRandomLoadingId(null);
+      if (started) useMp3Store.getState().setPlaying(prevId, true);
+    });
+  }, []);
+  reactExports.useEffect(() => {
+    const offPrev = window.api.random.onPrev(playPrev);
+    const offNext = window.api.random.onNext(playNext);
+    const offStop = window.api.random.onStop(stopAll);
+    return () => {
+      offPrev();
+      offNext();
+      offStop();
+    };
+  }, [playPrev, playNext, stopAll]);
+  reactExports.useEffect(() => {
+    if (!settings.randomPrevBind && !settings.randomNextBind && !settings.randomStopBind) return;
+    const onKeyDown = (e) => {
+      const target = e.target;
+      if (target.closest("input, textarea, [contenteditable]")) return;
+      const acc = buildAccelerator$2(e);
+      if (settings.randomPrevBind && acc === settings.randomPrevBind) {
+        e.preventDefault();
+        playPrev();
+      } else if (settings.randomNextBind && acc === settings.randomNextBind) {
+        e.preventDefault();
+        playNext();
+      } else if (settings.randomStopBind && acc === settings.randomStopBind) {
+        e.preventDefault();
+        stopAll();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [settings.randomPrevBind, settings.randomNextBind, settings.randomStopBind, playPrev, playNext, stopAll]);
+  reactExports.useEffect(() => {
+    if (settings.randomPrevBind) window.api.random.setPrevKey(settings.randomPrevBind).catch(() => {
+    });
+  }, [settings.randomPrevBind]);
+  reactExports.useEffect(() => {
+    if (settings.randomNextBind) window.api.random.setNextKey(settings.randomNextBind).catch(() => {
+    });
+  }, [settings.randomNextBind]);
+  reactExports.useEffect(() => {
+    if (settings.randomStopBind) window.api.random.setStopKey(settings.randomStopBind).catch(() => {
+    });
+  }, [settings.randomStopBind]);
+  return { playPrev, playNext, stopAll };
+}
+const tabBar = "_tabBar_y0b8w_1";
+const tabArea = "_tabArea_y0b8w_13";
+const tabs = "_tabs_y0b8w_22";
+const arrowBtn = "_arrowBtn_y0b8w_36";
+const arrowDisabled = "_arrowDisabled_y0b8w_57";
+const fadeLeft = "_fadeLeft_y0b8w_63";
+const fadeRight = "_fadeRight_y0b8w_64";
+const fadeVisible = "_fadeVisible_y0b8w_85";
+const tab = "_tab_y0b8w_1";
+const active$1 = "_active_y0b8w_105";
+const tabLabel = "_tabLabel_y0b8w_115";
+const tabInput = "_tabInput_y0b8w_124";
+const tabClose = "_tabClose_y0b8w_133";
+const tabCloseConfirm = "_tabCloseConfirm_y0b8w_152";
+const addTab = "_addTab_y0b8w_162";
+const actions = "_actions_y0b8w_181";
+const pillGroup = "_pillGroup_y0b8w_189";
+const pillOn = "_pillOn_y0b8w_200";
+const pillSkip = "_pillSkip_y0b8w_205";
+const pillDivider = "_pillDivider_y0b8w_239";
+const pillRandom = "_pillRandom_y0b8w_251";
+const addFileBtn = "_addFileBtn_y0b8w_281";
+const dropTarget$1 = "_dropTarget_y0b8w_296";
+const stopBtn = "_stopBtn_y0b8w_302";
+const kbToggleBtn = "_kbToggleBtn_y0b8w_326";
+const kbToggleOff = "_kbToggleOff_y0b8w_348";
+const styles$7 = {
   tabBar,
+  tabArea,
   tabs,
+  arrowBtn,
+  arrowDisabled,
+  fadeLeft,
+  fadeRight,
+  fadeVisible,
   tab,
   active: active$1,
   tabLabel,
   tabInput,
   tabClose,
+  tabCloseConfirm,
   addTab,
   actions,
-  randomBtn,
-  randomOn,
-  addFileBtn
+  pillGroup,
+  pillOn,
+  pillSkip,
+  pillDivider,
+  pillRandom,
+  addFileBtn,
+  dropTarget: dropTarget$1,
+  stopBtn,
+  kbToggleBtn,
+  kbToggleOff
 };
 function TabBar() {
   const presets = useMp3Store((s) => s.presets);
@@ -13087,14 +14435,44 @@ function TabBar() {
   const addPreset = useMp3Store((s) => s.addPreset);
   const removePreset = useMp3Store((s) => s.removePreset);
   const renamePreset = useMp3Store((s) => s.renamePreset);
+  const reorderPresets = useMp3Store((s) => s.reorderPresets);
   const addMp3s = useMp3Store((s) => s.addMp3s);
   const setDuration = useMp3Store((s) => s.setDuration);
   const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
   const setPlaying = useMp3Store((s) => s.setPlaying);
-  const [isRandom, setIsRandom] = reactExports.useState(false);
+  const { playPrev, playNext, stopAll } = useRandomControls();
+  const isRandom = useRandomStore((s) => s.isRandomActive);
+  const randomPresetName = useRandomStore((s) => s.randomPresetName);
+  const randomLoadingId = useRandomStore((s) => s.randomLoadingId);
   const [editingPreset, setEditingPreset] = reactExports.useState(null);
   const [editName, setEditName] = reactExports.useState("");
   const editRef = reactExports.useRef(null);
+  const [confirmDeleteId, setConfirmDeleteId] = reactExports.useState(null);
+  const confirmTimerRef = reactExports.useRef(null);
+  const dragPresetIdx = reactExports.useRef(null);
+  const [dropPresetIdx, setDropPresetIdx] = reactExports.useState(null);
+  const tabsRef = reactExports.useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = reactExports.useState(false);
+  const [canScrollRight, setCanScrollRight] = reactExports.useState(false);
+  const updateScrollState = reactExports.useCallback(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+  reactExports.useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState);
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      ro.disconnect();
+    };
+  }, [updateScrollState, presets]);
   const handleAddPreset = () => {
     const name = `プリセット ${presets.length}`;
     addPreset(name);
@@ -13109,6 +14487,24 @@ function TabBar() {
     if (editingPreset && editName.trim()) renamePreset(editingPreset, editName);
     setEditingPreset(null);
   };
+  const handleDeleteClick = (e, id) => {
+    e.stopPropagation();
+    if (confirmDeleteId === id) {
+      if (confirmTimerRef.current) {
+        clearTimeout(confirmTimerRef.current);
+        confirmTimerRef.current = null;
+      }
+      setConfirmDeleteId(null);
+      removePreset(id);
+    } else {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmDeleteId(id);
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmDeleteId(null);
+        confirmTimerRef.current = null;
+      }, 2e3);
+    }
+  };
   const handleAddFiles = async () => {
     const filePaths = await window.api.dialog.openMp3();
     if (filePaths.length === 0) return;
@@ -13121,85 +14517,186 @@ function TabBar() {
   };
   const toggleRandom = () => {
     if (isRandom) {
+      const idToStop = randomQueueManager.getCurrentPlayingId();
       randomQueueManager.stop();
-      setIsRandom(false);
+      useRandomStore.getState().setCurrentRandomPlayingId(null);
+      useRandomStore.getState().setRandomActive(false);
+      useRandomStore.getState().setRandomLoadingId(null);
+      if (idToStop) {
+        audioManager.stop(idToStop);
+        setPlaying(idToStop, false);
+      }
     } else {
       const activePreset = presets.find((p) => p.id === activePresetId);
-      const ids = activePresetId === GLOBAL_PRESET_ID ? mp3s.map((m) => m.id) : activePreset?.mp3Ids ?? [];
+      const allIds = activePresetId === GLOBAL_PRESET_ID ? mp3s.map((m) => m.id) : activePreset?.mp3Ids ?? [];
+      const ids = allIds.filter((id) => !mp3s.find((m) => m.id === id)?.loop);
       if (ids.length === 0) return;
+      const presetName = activePreset?.name ?? "全体";
       randomQueueManager.start(activePresetId, ids);
-      setIsRandom(true);
+      useRandomStore.getState().setRandomActive(true, presetName);
       const nextId = randomQueueManager.getNext();
       if (!nextId) return;
       const mp3 = mp3s.find((m) => m.id === nextId);
       if (!mp3) return;
+      randomQueueManager.setCurrentPlaying(nextId);
+      useRandomStore.getState().setCurrentRandomPlayingId(nextId);
+      useRandomStore.getState().setRandomLoadingId(nextId);
       audioManager.play(mp3, settings).then((started) => {
-        if (started) setPlaying(nextId, true);
+        useRandomStore.getState().setRandomLoadingId(null);
+        if (started) {
+          setPlaying(nextId, true);
+        } else if (started === false) {
+          playNextRandom();
+        } else {
+          randomQueueManager.clearCurrentPlaying();
+          useRandomStore.getState().setCurrentRandomPlayingId(null);
+        }
       });
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$6.tabBar, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$6.tabs, children: [
-      presets.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          className: `${styles$6.tab} ${activePresetId === p.id ? styles$6.active : ""}`,
-          children: [
-            editingPreset === p.id ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                ref: editRef,
-                className: styles$6.tabInput,
-                value: editName,
-                onChange: (e) => setEditName(e.target.value),
-                onBlur: commitPresetRename,
-                onKeyDown: (e) => {
-                  if (e.key === "Enter") commitPresetRename();
-                  if (e.key === "Escape") setEditingPreset(null);
-                },
-                onClick: (e) => e.stopPropagation()
-              }
-            ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: styles$6.tabLabel,
-                onClick: () => setActivePreset(p.id),
-                onDoubleClick: () => handlePresetDblClick(p.id, p.name),
-                children: p.name
-              }
-            ),
-            p.id !== GLOBAL_PRESET_ID && /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                className: styles$6.tabClose,
-                onClick: (e) => {
-                  e.stopPropagation();
-                  removePreset(p.id);
-                },
-                title: "プリセット削除",
-                children: "×"
-              }
-            )
-          ]
-        },
-        p.id
-      )),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$6.addTab, onClick: handleAddPreset, title: "プリセット追加", children: "+" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$6.actions, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+  const onPresetDragStart = (idx) => {
+    dragPresetIdx.current = idx;
+  };
+  const onPresetDragOver = (e, idx) => {
+    e.preventDefault();
+    if (idx !== 0) setDropPresetIdx(idx);
+  };
+  const onPresetDrop = (idx) => {
+    const from = dragPresetIdx.current;
+    if (from !== null && from !== idx && idx !== 0) {
+      reorderPresets(from, idx);
+    }
+    dragPresetIdx.current = null;
+    setDropPresetIdx(null);
+  };
+  const onPresetDragEnd = () => {
+    dragPresetIdx.current = null;
+    setDropPresetIdx(null);
+  };
+  const scrollTabs = (dir) => {
+    tabsRef.current?.scrollBy({ left: dir === "left" ? -120 : 120, behavior: "smooth" });
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$7.tabBar, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$7.tabArea, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: `${styles$6.randomBtn} ${isRandom ? styles$6.randomOn : ""}`,
-          onClick: toggleRandom,
-          title: "ランダム再生",
-          children: [
-            "⇄ ランダム",
-            isRandom ? " ON" : ""
-          ]
+          className: `${styles$7.arrowBtn} ${!canScrollLeft ? styles$7.arrowDisabled : ""}`,
+          onClick: () => scrollTabs("left"),
+          tabIndex: -1,
+          children: "‹"
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$6.addFileBtn, onClick: handleAddFiles, title: "ファイル追加", children: "+ 追加" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${styles$7.fadeLeft} ${canScrollLeft ? styles$7.fadeVisible : ""}` }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: tabsRef, className: styles$7.tabs, children: [
+        presets.map((p, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            draggable: p.id !== GLOBAL_PRESET_ID,
+            onDragStart: () => onPresetDragStart(idx),
+            onDragOver: (e) => onPresetDragOver(e, idx),
+            onDrop: () => onPresetDrop(idx),
+            onDragEnd: onPresetDragEnd,
+            className: [
+              styles$7.tab,
+              activePresetId === p.id ? styles$7.active : "",
+              dropPresetIdx === idx ? styles$7.dropTarget : ""
+            ].join(" "),
+            children: [
+              editingPreset === p.id ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  ref: editRef,
+                  className: styles$7.tabInput,
+                  value: editName,
+                  onChange: (e) => setEditName(e.target.value),
+                  onBlur: commitPresetRename,
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter") commitPresetRename();
+                    if (e.key === "Escape") setEditingPreset(null);
+                  },
+                  onClick: (e) => e.stopPropagation()
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: styles$7.tabLabel,
+                  onClick: () => setActivePreset(p.id),
+                  onDoubleClick: () => handlePresetDblClick(p.id, p.name),
+                  children: p.name
+                }
+              ),
+              p.id !== GLOBAL_PRESET_ID && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  className: `${styles$7.tabClose} ${confirmDeleteId === p.id ? styles$7.tabCloseConfirm : ""}`,
+                  onClick: (e) => handleDeleteClick(e, p.id),
+                  title: confirmDeleteId === p.id ? "もう一度クリックで削除" : "プリセット削除",
+                  children: confirmDeleteId === p.id ? "!" : "×"
+                }
+              )
+            ]
+          },
+          p.id
+        )),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$7.addTab, onClick: handleAddPreset, title: "プリセット追加", children: "+" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${styles$7.fadeRight} ${canScrollRight ? styles$7.fadeVisible : ""}` }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: `${styles$7.arrowBtn} ${!canScrollRight ? styles$7.arrowDisabled : ""}`,
+          onClick: () => scrollTabs("right"),
+          tabIndex: -1,
+          children: "›"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$7.actions, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${styles$7.pillGroup} ${isRandom ? styles$7.pillOn : ""}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: styles$7.pillSkip,
+            onClick: playPrev,
+            disabled: !isRandom || !randomQueueManager.hasPrevious() || randomLoadingId !== null,
+            title: "前の曲",
+            children: "«"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$7.pillDivider }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: styles$7.pillRandom,
+            onClick: toggleRandom,
+            title: "ランダム再生",
+            children: isRandom ? `⇄ ${randomPresetName}` : "⇄ ランダム"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$7.pillDivider }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: styles$7.pillSkip,
+            onClick: playNext,
+            disabled: !isRandom || randomLoadingId !== null,
+            title: "次の曲",
+            children: "»"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$7.stopBtn, onClick: stopAll, title: "全停止", children: "全停止 ■" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: `${styles$7.kbToggleBtn} ${!settings.keybindEnabled ? styles$7.kbToggleOff : ""}`,
+          onClick: () => updateSettings({ keybindEnabled: !settings.keybindEnabled }),
+          title: settings.keybindEnabled ? "キーバインド有効（クリックで無効化）" : "キーバインド無効（クリックで有効化）",
+          children: settings.keybindEnabled ? "KB: ON" : "KB: OFF"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$7.addFileBtn, onClick: handleAddFiles, title: "ファイル追加", children: "+ 追加" })
     ] })
   ] });
 }
@@ -13210,7 +14707,7 @@ const editWrapper = "_editWrapper_181o7_33";
 const input = "_input_181o7_41";
 const confirmBtn = "_confirmBtn_181o7_52";
 const cancelBtn = "_cancelBtn_181o7_65";
-const styles$5 = {
+const styles$6 = {
   displayWrapper,
   nameText,
   editBtn,
@@ -13240,12 +14737,12 @@ function Mp3NameEditor({ name, onSave }) {
     setEditing(false);
   };
   if (editing) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$5.editWrapper, children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$6.editWrapper, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "input",
         {
           ref: inputRef,
-          className: styles$5.input,
+          className: styles$6.input,
           value: draft,
           onChange: (e) => setDraft(e.target.value),
           onBlur: commit,
@@ -13257,16 +14754,16 @@ function Mp3NameEditor({ name, onSave }) {
           onClick: (e) => e.stopPropagation()
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$5.confirmBtn, onMouseDown: commit, title: "確定", children: "✓" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$5.cancelBtn, onMouseDown: cancel, title: "キャンセル", children: "✕" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$6.confirmBtn, onMouseDown: commit, title: "確定", children: "✓" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$6.cancelBtn, onMouseDown: cancel, title: "キャンセル", children: "✕" })
     ] });
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$5.displayWrapper, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$5.nameText, title: name, children: name }),
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$6.displayWrapper, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$6.nameText, title: name, children: name }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "button",
       {
-        className: styles$5.editBtn,
+        className: styles$6.editBtn,
         onClick: (e) => {
           e.stopPropagation();
           setEditing(true);
@@ -13278,14 +14775,14 @@ function Mp3NameEditor({ name, onSave }) {
   ] });
 }
 const wrapper = "_wrapper_1mggd_1";
-const keyBadge = "_keyBadge_1mggd_8";
+const keyBadge$2 = "_keyBadge_1mggd_8";
 const warn = "_warn_1mggd_22";
 const removeKey = "_removeKey_1mggd_28";
 const captureBtn = "_captureBtn_1mggd_39";
 const capturing = "_capturing_1mggd_54";
-const styles$4 = {
+const styles$5 = {
   wrapper,
-  keyBadge,
+  keyBadge: keyBadge$2,
   warn,
   removeKey,
   captureBtn,
@@ -13302,7 +14799,9 @@ function KeybindEditor({ mp3 }) {
     (key) => allMp3s.some((m) => m.id !== mp3.id && m.keybinds.includes(key))
   );
   const removeKey2 = (key) => {
-    updateKeybinds(mp3.id, mp3.keybinds.filter((k) => k !== key));
+    const newKeybinds = mp3.keybinds.filter((k) => k !== key);
+    updateKeybinds(mp3.id, newKeybinds);
+    if (newKeybinds.length === 0) audioManager.unpinBuffer(mp3.filePath);
   };
   const startCapture = () => {
     if (mp3.keybinds.length >= 3) return;
@@ -13312,7 +14811,9 @@ function KeybindEditor({ mp3 }) {
       const key = eventToAccelerator(e);
       if (!key) return;
       if (!mp3.keybinds.includes(key)) {
-        updateKeybinds(mp3.id, [...mp3.keybinds, key]);
+        const newKeybinds = [...mp3.keybinds, key];
+        updateKeybinds(mp3.id, newKeybinds);
+        if (newKeybinds.length === 1) audioManager.pinBuffer(mp3.filePath);
       }
       setCapturing(false);
       window.removeEventListener("keydown", onKeyDown);
@@ -13324,15 +14825,15 @@ function KeybindEditor({ mp3 }) {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("blur", onBlur, { once: true });
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$4.wrapper, children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$5.wrapper, children: [
     mp3.keybinds.map((key) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "span",
       {
-        className: `${styles$4.keyBadge} ${duplicates.includes(key) ? styles$4.warn : ""}`,
+        className: `${styles$5.keyBadge} ${duplicates.includes(key) ? styles$5.warn : ""}`,
         title: duplicates.includes(key) ? "他のMP3でも使用中" : "",
         children: [
           displayKey(key),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$4.removeKey, onClick: () => removeKey2(key), children: "×" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$5.removeKey, onClick: () => removeKey2(key), children: "×" })
         ]
       },
       key
@@ -13340,7 +14841,7 @@ function KeybindEditor({ mp3 }) {
     mp3.keybinds.length < 3 && /* @__PURE__ */ jsxRuntimeExports.jsx(
       "button",
       {
-        className: `${styles$4.captureBtn} ${capturing2 ? styles$4.capturing : ""}`,
+        className: `${styles$5.captureBtn} ${capturing2 ? styles$5.capturing : ""}`,
         onClick: startCapture,
         children: capturing2 ? "キーを押して..." : "+ キー"
       }
@@ -13351,13 +14852,13 @@ const menu = "_menu_15sh5_1";
 const item = "_item_15sh5_15";
 const danger = "_danger_15sh5_30";
 const divider = "_divider_15sh5_38";
-const label$1 = "_label_15sh5_44";
-const styles$3 = {
+const label$2 = "_label_15sh5_44";
+const styles$4 = {
   menu,
   item,
   danger,
   divider,
-  label: label$1
+  label: label$2
 };
 function Mp3ContextMenu({ mp3, onClose, anchorRef }) {
   const removeMp3 = useMp3Store((s) => s.removeMp3);
@@ -13388,16 +14889,16 @@ function Mp3ContextMenu({ mp3, onClose, anchorRef }) {
   const otherPresets = presets.filter(
     (p) => p.id !== GLOBAL_PRESET_ID && p.id !== activePresetId && !p.mp3Ids.includes(mp3.id)
   );
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: menuRef, className: styles$3.menu, children: [
-    activePresetId !== GLOBAL_PRESET_ID && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$3.item, onClick: handlePresetDelete, children: "プリセットから削除" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: `${styles$3.item} ${styles$3.danger}`, onClick: handleFullDelete, children: "完全に削除" }),
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: menuRef, className: styles$4.menu, children: [
+    activePresetId !== GLOBAL_PRESET_ID && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$4.item, onClick: handlePresetDelete, children: "プリセットから削除" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: `${styles$4.item} ${styles$4.danger}`, onClick: handleFullDelete, children: "完全に削除" }),
     otherPresets.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$3.divider }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$3.label, children: "プリセットに追加" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$4.divider }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$4.label, children: "プリセットに追加" }),
       otherPresets.map((p) => /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: styles$3.item,
+          className: styles$4.item,
           onClick: () => {
             addMp3ToPreset(mp3.id, p.id);
             onClose();
@@ -13409,33 +14910,61 @@ function Mp3ContextMenu({ mp3, onClose, anchorRef }) {
     ] })
   ] });
 }
-const row = "_row_rc31s_1";
-const playing = "_playing_rc31s_15";
-const colName$1 = "_colName_rc31s_20";
-const colKeys$1 = "_colKeys_rc31s_27";
-const colDur$1 = "_colDur_rc31s_32";
-const colStatus$1 = "_colStatus_rc31s_37";
-const colActions$1 = "_colActions_rc31s_42";
-const playBtn = "_playBtn_rc31s_50";
-const playingBtn = "_playingBtn_rc31s_71";
-const duration = "_duration_rc31s_77";
-const playingIndicator = "_playingIndicator_rc31s_83";
-const dot = "_dot_rc31s_92";
-const menuBtn = "_menuBtn_rc31s_105";
-const styles$2 = {
-  row,
+const row$1 = "_row_17wyn_1";
+const playing = "_playing_17wyn_15";
+const randomPlaying = "_randomPlaying_17wyn_20";
+const colDrag$1 = "_colDrag_17wyn_25";
+const colName$1 = "_colName_17wyn_39";
+const colKeys$1 = "_colKeys_17wyn_46";
+const colDur$1 = "_colDur_17wyn_51";
+const colVolume$1 = "_colVolume_17wyn_56";
+const colStatus$1 = "_colStatus_17wyn_62";
+const colActions$1 = "_colActions_17wyn_69";
+const playBtn = "_playBtn_17wyn_76";
+const playingBtn = "_playingBtn_17wyn_97";
+const randomPlayingBtn = "_randomPlayingBtn_17wyn_103";
+const loadingBtn = "_loadingBtn_17wyn_109";
+const loadingIcon = "_loadingIcon_17wyn_125";
+const duration = "_duration_17wyn_131";
+const volumeSlider = "_volumeSlider_17wyn_138";
+const volumeLabel = "_volumeLabel_17wyn_145";
+const loopBtn = "_loopBtn_17wyn_152";
+const loopOn = "_loopOn_17wyn_169";
+const restartBtn = "_restartBtn_17wyn_174";
+const restartOn = "_restartOn_17wyn_191";
+const menuBtn = "_menuBtn_17wyn_196";
+const seekBar = "_seekBar_17wyn_213";
+const seekFill = "_seekFill_17wyn_228";
+const seekFillRandom = "_seekFillRandom_17wyn_234";
+const seekHandle = "_seekHandle_17wyn_238";
+const styles$3 = {
+  row: row$1,
   playing,
+  randomPlaying,
+  colDrag: colDrag$1,
   colName: colName$1,
   colKeys: colKeys$1,
   colDur: colDur$1,
+  colVolume: colVolume$1,
   colStatus: colStatus$1,
   colActions: colActions$1,
   playBtn,
   playingBtn,
+  randomPlayingBtn,
+  loadingBtn,
+  loadingIcon,
   duration,
-  playingIndicator,
-  dot,
-  menuBtn
+  volumeSlider,
+  volumeLabel,
+  loopBtn,
+  loopOn,
+  restartBtn,
+  restartOn,
+  menuBtn,
+  seekBar,
+  seekFill,
+  seekFillRandom,
+  seekHandle
 };
 function formatDuration(sec) {
   if (!sec) return "--:--";
@@ -13443,47 +14972,162 @@ function formatDuration(sec) {
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
-function Mp3ItemRow({ mp3 }) {
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+function Mp3ItemRow({ mp3, onHandlePointerDown }) {
   const updateMp3Name = useMp3Store((s) => s.updateMp3Name);
   const setPlaying = useMp3Store((s) => s.setPlaying);
+  const setLoading = useMp3Store((s) => s.setLoading);
+  const updateVolume = useMp3Store((s) => s.updateVolume);
+  const toggleLoop = useMp3Store((s) => s.toggleLoop);
+  const toggleRestart = useMp3Store((s) => s.toggleRestart);
   const settings = useSettingsStore((s) => s.settings);
+  const isRandomPlaying = useRandomStore((s) => s.currentRandomPlayingId === mp3.id);
+  const isRandomLoading = useRandomStore((s) => s.randomLoadingId === mp3.id);
   const [menuOpen, setMenuOpen] = reactExports.useState(false);
+  const [isLoading, setIsLoading] = reactExports.useState(false);
   const menuBtnRef = reactExports.useRef(null);
+  const [elapsed, setElapsed] = reactExports.useState(0);
+  const isDragging = reactExports.useRef(false);
+  const rafId = reactExports.useRef(0);
+  const seekBarRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    if (!mp3.isPlaying) {
+      setElapsed(0);
+      return;
+    }
+    const tick = () => {
+      if (!audioManager.isPlaying(mp3.id)) {
+        setPlaying(mp3.id, false);
+        return;
+      }
+      if (!isDragging.current) setElapsed(audioManager.getCurrentTime(mp3.id));
+      rafId.current = requestAnimationFrame(tick);
+    };
+    rafId.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId.current);
+  }, [mp3.isPlaying, mp3.id, setPlaying]);
+  const calcOffset = (clientX) => {
+    const el = seekBarRef.current;
+    if (!el || !mp3.duration) return 0;
+    const { left, width } = el.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - left) / width)) * mp3.duration;
+  };
+  const handleSeekMouseDown = reactExports.useCallback((e) => {
+    e.preventDefault();
+    isDragging.current = true;
+    setElapsed(calcOffset(e.clientX));
+    const onMove = (ev) => setElapsed(calcOffset(ev.clientX));
+    const onUp = (ev) => {
+      isDragging.current = false;
+      const offset = calcOffset(ev.clientX);
+      setElapsed(offset);
+      audioManager.seek(mp3.id, offset);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [mp3.id, mp3.duration]);
   const handlePlay = () => {
     if (mp3.isPlaying) {
       audioManager.stop(mp3.id);
       setPlaying(mp3.id, false);
     } else {
+      setIsLoading(true);
+      setLoading(mp3.id, true);
       audioManager.play(mp3, settings).then((started) => {
+        setIsLoading(false);
+        setLoading(mp3.id, false);
         if (started) setPlaying(mp3.id, true);
+      }).catch(() => {
+        setIsLoading(false);
+        setLoading(mp3.id, false);
       });
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${styles$2.row} ${mp3.isPlaying ? styles$2.playing : ""}`, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.colName, children: [
+  const handleVolumeChange = (e) => {
+    const vol = Number(e.target.value) / 100;
+    updateVolume(mp3.id, vol);
+    audioManager.updateItemGain(mp3.id, vol);
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${styles$3.row} ${mp3.isPlaying ? isRandomPlaying ? styles$3.randomPlaying : styles$3.playing : ""}`, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: styles$3.colDrag,
+        title: onHandlePointerDown ? "ドラッグで並び替え" : void 0,
+        onPointerDown: onHandlePointerDown,
+        style: onHandlePointerDown ? void 0 : { visibility: "hidden" },
+        children: "⠿"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$3.colName, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: `${styles$2.playBtn} ${mp3.isPlaying ? styles$2.playingBtn : ""}`,
+          className: `${styles$3.playBtn} ${mp3.isPlaying ? isRandomPlaying ? styles$3.randomPlayingBtn : styles$3.playingBtn : ""} ${isLoading || isRandomLoading ? styles$3.loadingBtn : ""}`,
           onClick: handlePlay,
-          title: mp3.isPlaying ? "停止" : "再生",
-          children: mp3.isPlaying ? "■" : "▶"
+          disabled: isLoading || isRandomLoading,
+          title: isLoading || isRandomLoading ? "読み込み中..." : mp3.isPlaying ? "停止" : "再生",
+          children: mp3.isPlaying ? "■" : isLoading || isRandomLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$3.loadingIcon, children: "↻" }) : "▶"
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Mp3NameEditor, { name: mp3.name, onSave: (n) => updateMp3Name(mp3.id, n) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.colKeys, children: /* @__PURE__ */ jsxRuntimeExports.jsx(KeybindEditor, { mp3 }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.colDur, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$2.duration, children: formatDuration(mp3.duration) }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.colStatus, children: mp3.isPlaying && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$2.playingIndicator, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$2.dot }),
-      "再生中"
-    ] }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.colActions, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$3.colKeys, children: /* @__PURE__ */ jsxRuntimeExports.jsx(KeybindEditor, { mp3 }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$3.colDur, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$3.duration, children: `${mp3.isPlaying ? formatTime(elapsed) : "0:00"} / ${formatDuration(mp3.duration)}` }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$3.colVolume, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "range",
+          className: styles$3.volumeSlider,
+          min: 0,
+          max: 200,
+          value: Math.round((mp3.volume ?? 1) * 100),
+          onChange: handleVolumeChange,
+          title: `音量: ${Math.round((mp3.volume ?? 1) * 100)}%`
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles$3.volumeLabel, children: [
+        Math.round((mp3.volume ?? 1) * 100),
+        "%"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$3.colStatus, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: `${styles$3.loopBtn} ${mp3.loop ? styles$3.loopOn : ""}`,
+          onClick: () => {
+            const next = !(mp3.loop ?? false);
+            toggleLoop(mp3.id);
+            audioManager.updateLoop(mp3.id, next);
+          },
+          title: mp3.loop ? "ループOFF" : "ループON",
+          children: "↺"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: `${styles$3.restartBtn} ${mp3.restart ? styles$3.restartOn : ""}`,
+          onClick: () => toggleRestart(mp3.id),
+          title: mp3.restart ? "再生しなおしOFF" : "再生しなおしON",
+          children: "↩"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$3.colActions, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
           ref: menuBtnRef,
-          className: styles$2.menuBtn,
+          className: styles$3.menuBtn,
           onClick: () => setMenuOpen((o) => !o),
           title: "操作",
           children: "⋮"
@@ -13497,130 +15141,412 @@ function Mp3ItemRow({ mp3 }) {
           anchorRef: menuBtnRef
         }
       )
-    ] })
+    ] }),
+    mp3.isPlaying && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        ref: seekBarRef,
+        className: styles$3.seekBar,
+        onMouseDown: handleSeekMouseDown,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: `${styles$3.seekFill} ${isRandomPlaying ? styles$3.seekFillRandom : ""}`,
+              style: { width: `${mp3.duration ? elapsed / mp3.duration * 100 : 0}%` }
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: styles$3.seekHandle,
+              style: { left: `${mp3.duration ? elapsed / mp3.duration * 100 : 0}%` }
+            }
+          )
+        ]
+      }
+    )
   ] });
 }
-const container = "_container_83n68_1";
-const empty = "_empty_83n68_7";
-const list = "_list_83n68_18";
-const header$1 = "_header_83n68_22";
-const colName = "_colName_83n68_38";
-const colKeys = "_colKeys_83n68_39";
-const colDur = "_colDur_83n68_40";
-const colStatus = "_colStatus_83n68_41";
-const colActions = "_colActions_83n68_42";
-const styles$1 = {
-  container,
+const container$1 = "_container_zye2c_1";
+const empty = "_empty_zye2c_7";
+const list = "_list_zye2c_18";
+const header$1 = "_header_zye2c_22";
+const colDrag = "_colDrag_zye2c_38";
+const colName = "_colName_zye2c_39";
+const colKeys = "_colKeys_zye2c_40";
+const colDur = "_colDur_zye2c_41";
+const colVolume = "_colVolume_zye2c_42";
+const colStatus = "_colStatus_zye2c_43";
+const colActions = "_colActions_zye2c_44";
+const dropTarget = "_dropTarget_zye2c_49";
+const colSortable = "_colSortable_zye2c_55";
+const colSortActive = "_colSortActive_zye2c_66";
+const colSortReset = "_colSortReset_zye2c_70";
+const sortArrow = "_sortArrow_zye2c_79";
+const styles$2 = {
+  container: container$1,
   empty,
   list,
   header: header$1,
+  colDrag,
   colName,
   colKeys,
   colDur,
+  colVolume,
   colStatus,
-  colActions
+  colActions,
+  dropTarget,
+  colSortable,
+  colSortActive,
+  colSortReset,
+  sortArrow
 };
-function Mp3List({ mp3s }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$1.container, children: mp3s.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$1.empty, children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "MP3ファイルをドラッグ&ドロップするか、「+ 追加」ボタンで追加してください" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.list, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.header, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.colName, children: "名前" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.colKeys, children: "キーバインド" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.colDur, children: "時間" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.colStatus, children: "状態" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.colActions })
+function Mp3List({ mp3s, activePresetId }) {
+  const reorderMp3InPreset = useMp3Store((s) => s.reorderMp3InPreset);
+  const presets = useMp3Store((s) => s.presets);
+  const dragFromIdx = reactExports.useRef(null);
+  const [dropIdx, setDropIdx] = reactExports.useState(null);
+  const rowRefs = reactExports.useRef(/* @__PURE__ */ new Map());
+  const loadingIds = useMp3Store((s) => s.loadingIds);
+  const randomLoadingId = useRandomStore((s) => s.randomLoadingId);
+  const currentRandomPlayingId = useRandomStore((s) => s.currentRandomPlayingId);
+  const [sortField, setSortField] = reactExports.useState("default");
+  const [sortDir, setSortDir] = reactExports.useState("asc");
+  const handleSort = (field2) => {
+    if (sortField === field2) {
+      setSortDir((d) => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field2);
+      setSortDir("asc");
+    }
+  };
+  const resetSort = () => {
+    setSortField("default");
+    setSortDir("asc");
+  };
+  const handlePlayingColumnClick = () => {
+    if (sortField === "default") {
+      setSortField("playing");
+      setSortDir("desc");
+    } else {
+      resetSort();
+    }
+  };
+  const displayMp3s = reactExports.useMemo(() => {
+    if (sortField === "default") return mp3s;
+    return [...mp3s].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "name") cmp = a.name.localeCompare(b.name, "ja");
+      else if (sortField === "keybind") {
+        const len = Math.max(a.keybinds.length, b.keybinds.length, 1);
+        for (let i = 0; i < len; i++) {
+          cmp = (a.keybinds[i] ?? "").localeCompare(b.keybinds[i] ?? "");
+          if (cmp !== 0) break;
+        }
+      } else if (sortField === "duration") cmp = a.duration - b.duration;
+      else if (sortField === "volume") cmp = (a.volume ?? 1) - (b.volume ?? 1);
+      else if (sortField === "status") {
+        const scoreA = (a.loop ? 2 : 0) + (a.restart ? 1 : 0);
+        const scoreB = (b.loop ? 2 : 0) + (b.restart ? 1 : 0);
+        cmp = scoreA - scoreB;
+      } else if (sortField === "playing") {
+        const score = (m) => {
+          if (m.isPlaying && m.id === currentRandomPlayingId) return 4;
+          if (m.isPlaying) return 3;
+          if (m.id === randomLoadingId) return 2;
+          if (loadingIds.includes(m.id)) return 1;
+          return 0;
+        };
+        cmp = score(a) - score(b);
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [mp3s, sortField, sortDir, randomLoadingId, currentRandomPlayingId, loadingIds]);
+  const SortArrow = ({ field: field2 }) => {
+    if (sortField !== field2) return null;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$2.sortArrow, children: sortDir === "asc" ? " ▲" : " ▼" });
+  };
+  const enableDrag = (id) => {
+    const el = rowRefs.current.get(id);
+    if (el) el.draggable = true;
+  };
+  const disableDrag = (id) => {
+    const el = rowRefs.current.get(id);
+    if (el) el.draggable = false;
+  };
+  const onDrop = (toIdx) => {
+    const from = dragFromIdx.current;
+    if (from !== null && from !== toIdx) {
+      const preset = presets.find((p) => p.id === activePresetId);
+      if (preset) {
+        const fromId = displayMp3s[from]?.id;
+        const toId = displayMp3s[toIdx]?.id;
+        const presetFromIdx = preset.mp3Ids.indexOf(fromId ?? "");
+        const presetToIdx = preset.mp3Ids.indexOf(toId ?? "");
+        if (presetFromIdx >= 0 && presetToIdx >= 0) {
+          reorderMp3InPreset(activePresetId, presetFromIdx, presetToIdx);
+        }
+      }
+    }
+    dragFromIdx.current = null;
+    setDropIdx(null);
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.container, children: mp3s.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.empty, children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "MP3ファイルをドラッグ&ドロップするか、「+ 追加」ボタンで追加してください" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.list, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.header, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          className: `${styles$2.colDrag} ${styles$2.colSortable} ${sortField === "playing" ? styles$2.colSortActive : ""} ${sortField !== "default" && sortField !== "playing" ? styles$2.colSortReset : ""}`,
+          onClick: handlePlayingColumnClick,
+          title: sortField === "default" ? "再生中でソート" : "デフォルト順に戻す",
+          children: sortField === "default" ? "▶" : "≡"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "span",
+        {
+          className: `${styles$2.colName} ${styles$2.colSortable} ${sortField === "name" ? styles$2.colSortActive : ""}`,
+          onClick: () => handleSort("name"),
+          children: [
+            "名前",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SortArrow, { field: "name" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "span",
+        {
+          className: `${styles$2.colKeys} ${styles$2.colSortable} ${sortField === "keybind" ? styles$2.colSortActive : ""}`,
+          onClick: () => handleSort("keybind"),
+          children: [
+            "キーバインド",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SortArrow, { field: "keybind" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "span",
+        {
+          className: `${styles$2.colDur} ${styles$2.colSortable} ${sortField === "duration" ? styles$2.colSortActive : ""}`,
+          onClick: () => handleSort("duration"),
+          children: [
+            "時間",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SortArrow, { field: "duration" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "span",
+        {
+          className: `${styles$2.colVolume} ${styles$2.colSortable} ${sortField === "volume" ? styles$2.colSortActive : ""}`,
+          onClick: () => handleSort("volume"),
+          children: [
+            "音量",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SortArrow, { field: "volume" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "span",
+        {
+          className: `${styles$2.colStatus} ${styles$2.colSortable} ${sortField === "status" ? styles$2.colSortActive : ""}`,
+          onClick: () => handleSort("status"),
+          children: [
+            "状態",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SortArrow, { field: "status" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$2.colActions })
     ] }),
-    mp3s.map((mp3) => /* @__PURE__ */ jsxRuntimeExports.jsx(Mp3ItemRow, { mp3 }, mp3.id))
+    displayMp3s.map((mp3, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        ref: (el) => {
+          if (el) rowRefs.current.set(mp3.id, el);
+          else rowRefs.current.delete(mp3.id);
+        },
+        draggable: false,
+        onDragStart: () => {
+          dragFromIdx.current = idx;
+        },
+        onDragOver: (e) => {
+          e.preventDefault();
+          setDropIdx(idx);
+        },
+        onDrop: () => onDrop(idx),
+        onDragEnd: () => {
+          disableDrag(mp3.id);
+          dragFromIdx.current = null;
+          setDropIdx(null);
+        },
+        className: dropIdx === idx ? styles$2.dropTarget : "",
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Mp3ItemRow,
+          {
+            mp3,
+            onHandlePointerDown: sortField === "default" ? () => enableDrag(mp3.id) : void 0
+          }
+        )
+      },
+      mp3.id
+    ))
   ] }) });
 }
-const overlay = "_overlay_a8wv2_1";
-const modal = "_modal_a8wv2_11";
-const header = "_header_a8wv2_20";
-const closeBtn = "_closeBtn_a8wv2_30";
-const body = "_body_a8wv2_40";
-const field = "_field_a8wv2_47";
-const label = "_label_a8wv2_53";
-const volumeVal = "_volumeVal_a8wv2_62";
-const numberRow = "_numberRow_a8wv2_66";
-const numBtn = "_numBtn_a8wv2_72";
-const numValue = "_numValue_a8wv2_92";
-const slider = "_slider_a8wv2_100";
-const themeRow = "_themeRow_a8wv2_106";
-const themeBtn = "_themeBtn_a8wv2_111";
-const active = "_active_a8wv2_127";
-const styles = {
+const overlay = "_overlay_igcsg_1";
+const modal = "_modal_igcsg_11";
+const header = "_header_igcsg_20";
+const closeBtn = "_closeBtn_igcsg_30";
+const body = "_body_igcsg_40";
+const field = "_field_igcsg_47";
+const label$1 = "_label_igcsg_53";
+const numberRow = "_numberRow_igcsg_66";
+const numBtn = "_numBtn_igcsg_72";
+const numValue = "_numValue_igcsg_92";
+const themeRow = "_themeRow_igcsg_106";
+const themeBtn = "_themeBtn_igcsg_111";
+const active = "_active_igcsg_127";
+const shortcutSection = "_shortcutSection_igcsg_134";
+const shortcutLabel = "_shortcutLabel_igcsg_142";
+const shortcutRow = "_shortcutRow_igcsg_150";
+const shortcutName = "_shortcutName_igcsg_157";
+const keyGroup$1 = "_keyGroup_igcsg_163";
+const keyBadge$1 = "_keyBadge_igcsg_169";
+const clearBtn$1 = "_clearBtn_igcsg_180";
+const recordBtn$1 = "_recordBtn_igcsg_196";
+const recordBtnActive$1 = "_recordBtnActive_igcsg_212";
+const dangerZone = "_dangerZone_igcsg_224";
+const dangerLabel = "_dangerLabel_igcsg_232";
+const dangerRow = "_dangerRow_igcsg_240";
+const dangerDesc = "_dangerDesc_igcsg_247";
+const dangerBtn = "_dangerBtn_igcsg_252";
+const confirmRow = "_confirmRow_igcsg_268";
+const confirmYes = "_confirmYes_igcsg_274";
+const confirmNo = "_confirmNo_igcsg_288";
+const styles$1 = {
   overlay,
   modal,
   header,
   closeBtn,
   body,
   field,
-  label,
-  volumeVal,
+  label: label$1,
   numberRow,
   numBtn,
   numValue,
-  slider,
   themeRow,
   themeBtn,
-  active
+  active,
+  shortcutSection,
+  shortcutLabel,
+  shortcutRow,
+  shortcutName,
+  keyGroup: keyGroup$1,
+  keyBadge: keyBadge$1,
+  clearBtn: clearBtn$1,
+  recordBtn: recordBtn$1,
+  recordBtnActive: recordBtnActive$1,
+  dangerZone,
+  dangerLabel,
+  dangerRow,
+  dangerDesc,
+  dangerBtn,
+  confirmRow,
+  confirmYes,
+  confirmNo
 };
+function buildAccelerator$1(e) {
+  const parts = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  parts.push(e.key === " " ? "Space" : e.key);
+  return parts.join("+");
+}
 function SettingsModal({ settings, onUpdate, onClose }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles.overlay, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.modal, onClick: (e) => e.stopPropagation(), children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.header, children: [
+  const clearAllMp3s = useMp3Store((s) => s.clearAllMp3s);
+  const clearAllPresets = useMp3Store((s) => s.clearAllPresets);
+  const [confirmClearMp3s, setConfirmClearMp3s] = reactExports.useState(false);
+  const [confirmClearPresets, setConfirmClearPresets] = reactExports.useState(false);
+  const [recording, setRecording] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!recording) return;
+    const onKeyDown = (e) => {
+      e.preventDefault();
+      const acc = buildAccelerator$1(e);
+      if (recording === "prev") {
+        onUpdate({ randomPrevBind: acc });
+        window.api.random.setPrevKey(acc).catch(() => {
+        });
+      } else if (recording === "next") {
+        onUpdate({ randomNextBind: acc });
+        window.api.random.setNextKey(acc).catch(() => {
+        });
+      } else {
+        onUpdate({ randomStopBind: acc });
+        window.api.random.setStopKey(acc).catch(() => {
+        });
+      }
+      setRecording(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [recording, onUpdate]);
+  const handleClearAllMp3s = () => {
+    audioManager.stopAll();
+    clearAllMp3s();
+    setConfirmClearMp3s(false);
+  };
+  const handleClearAllPresets = () => {
+    clearAllPresets();
+    setConfirmClearPresets(false);
+  };
+  const bindRows = [
+    { key: "prev", label: "前の曲", value: settings.randomPrevBind },
+    { key: "next", label: "次の曲", value: settings.randomNextBind },
+    { key: "stop", label: "全停止", value: settings.randomStopBind }
+  ];
+  const clearBind = (target) => {
+    if (target === "prev") onUpdate({ randomPrevBind: "" });
+    else if (target === "next") onUpdate({ randomNextBind: "" });
+    else if (target === "stop") onUpdate({ randomStopBind: "" });
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$1.overlay, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.modal, onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.header, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "⚙ 設定" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles.closeBtn, onClick: onClose, children: "✕" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.closeBtn, onClick: onClose, children: "✕" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.body, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.field, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "最大同時再生数" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.numberRow, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.body, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.field, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles$1.label, children: "最大同時再生数" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.numberRow, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: styles.numBtn,
+              className: styles$1.numBtn,
               onClick: () => onUpdate({ maxConcurrent: Math.max(1, settings.maxConcurrent - 1) }),
               children: "▼"
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles.numValue, children: settings.maxConcurrent }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.numValue, children: settings.maxConcurrent }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: styles.numBtn,
+              className: styles$1.numBtn,
               onClick: () => onUpdate({ maxConcurrent: Math.min(20, settings.maxConcurrent + 1) }),
               children: "▲"
             }
           )
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.field, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: styles.label, children: [
-          "マスター音量 ",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: styles.volumeVal, children: [
-            Math.round(settings.masterVolume * 100),
-            "%"
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            type: "range",
-            className: styles.slider,
-            min: 0,
-            max: 1,
-            step: 0.01,
-            value: settings.masterVolume,
-            onChange: (e) => onUpdate({ masterVolume: parseFloat(e.target.value) })
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.field, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "テーマ" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.themeRow, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.field, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles$1.label, children: "テーマ" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.themeRow, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: `${styles.themeBtn} ${settings.theme === "dark" ? styles.active : ""}`,
+              className: `${styles$1.themeBtn} ${settings.theme === "dark" ? styles$1.active : ""}`,
               onClick: () => onUpdate({ theme: "dark" }),
               children: "● ダーク"
             }
@@ -13628,18 +15554,582 @@ function SettingsModal({ settings, onUpdate, onClose }) {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: `${styles.themeBtn} ${settings.theme === "light" ? styles.active : ""}`,
+              className: `${styles$1.themeBtn} ${settings.theme === "light" ? styles$1.active : ""}`,
               onClick: () => onUpdate({ theme: "light" }),
               children: "○ ライト"
             }
           )
         ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.shortcutSection, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$1.shortcutLabel, children: "ランダム再生ショートカット" }),
+        bindRows.map(({ key, label: label2, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.shortcutRow, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.shortcutName, children: label2 }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.keyGroup, children: [
+            value && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.keyBadge, children: value }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.clearBtn, onClick: () => clearBind(key), title: "クリア", children: "×" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                className: `${styles$1.recordBtn} ${recording === key ? styles$1.recordBtnActive : ""}`,
+                onClick: () => setRecording((r) => r === key ? null : key),
+                children: recording === key ? "キー入力待ち..." : value ? "変更" : "キーを記録"
+              }
+            )
+          ] })
+        ] }, key))
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.dangerZone, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$1.dangerLabel, children: "データ管理" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.dangerRow, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.dangerDesc, children: "全MP3ファイルを削除" }),
+          confirmClearMp3s ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.confirmRow, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.confirmYes, onClick: handleClearAllMp3s, children: "削除する" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.confirmNo, onClick: () => setConfirmClearMp3s(false), children: "キャンセル" })
+          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.dangerBtn, onClick: () => setConfirmClearMp3s(true), children: "削除" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.dangerRow, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles$1.dangerDesc, children: "全プリセットを削除" }),
+          confirmClearPresets ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$1.confirmRow, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.confirmYes, onClick: handleClearAllPresets, children: "削除する" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.confirmNo, onClick: () => setConfirmClearPresets(false), children: "キャンセル" })
+          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles$1.dangerBtn, onClick: () => setConfirmClearPresets(true), children: "削除" })
+        ] })
       ] })
     ] })
   ] }) });
 }
+const container = "_container_1oduo_1";
+const section = "_section_1oduo_10";
+const sectionTitle = "_sectionTitle_1oduo_20";
+const row = "_row_1oduo_29";
+const label = "_label_1oduo_35";
+const sliderGroup = "_sliderGroup_1oduo_76";
+const slider = "_slider_1oduo_76";
+const modeGroup = "_modeGroup_1oduo_96";
+const modeBtn = "_modeBtn_1oduo_101";
+const modeBtnActive = "_modeBtnActive_1oduo_117";
+const keyGroup = "_keyGroup_1oduo_127";
+const keyBadge = "_keyBadge_1oduo_133";
+const clearBtn = "_clearBtn_1oduo_143";
+const recordBtn = "_recordBtn_1oduo_165";
+const recordBtnActive = "_recordBtnActive_1oduo_181";
+const sliderValue = "_sliderValue_1oduo_193";
+const pitchEdge = "_pitchEdge_1oduo_201";
+const rowWrapper = "_rowWrapper_1oduo_299";
+const paramDesc = "_paramDesc_1oduo_305";
+const styles = {
+  container,
+  section,
+  sectionTitle,
+  row,
+  label,
+  sliderGroup,
+  slider,
+  modeGroup,
+  modeBtn,
+  modeBtnActive,
+  keyGroup,
+  keyBadge,
+  clearBtn,
+  recordBtn,
+  recordBtnActive,
+  sliderValue,
+  pitchEdge,
+  rowWrapper,
+  paramDesc
+};
+function buildAccelerator(e) {
+  const parts = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  parts.push(e.key === " " ? "Space" : e.key);
+  return parts.join("+");
+}
+function semitoneLabel(v) {
+  return (v > 0 ? "+" : "") + v + " st";
+}
+function dbLabel(v) {
+  return (v > 0 ? "+" : "") + v + " dB";
+}
+function SliderRow({ label: label2, desc, min, max, step, value, valueLabel, onChange }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: label2 }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.sliderGroup, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles.pitchEdge, children: min > 0 ? `+${min}` : min }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "range",
+            className: styles.slider,
+            min,
+            max,
+            step,
+            value,
+            onChange: (e) => onChange(Number(e.target.value))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles.pitchEdge, children: max > 0 ? `+${max}` : max }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles.sliderValue, children: valueLabel })
+      ] })
+    ] }),
+    desc && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: desc })
+  ] });
+}
+function VoiceChangerTab() {
+  const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const [recording, setRecording] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    if (!recording) return;
+    const onKeyDown = (e) => {
+      e.preventDefault();
+      const acc = buildAccelerator(e);
+      updateSettings({ micPushToKeyBind: acc });
+      window.api.ptk.setKey(acc).catch(() => {
+      });
+      setRecording(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [recording, updateSettings]);
+  const clearBind = () => updateSettings({ micPushToKeyBind: "" });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.container, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "Push to Key" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, style: { paddingLeft: 0 }, children: "キーを押している間だけマイクをオンにするモード" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "モード" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.modeGroup, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${!settings.micPushToKey ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micPushToKey: false }),
+              children: "常時有効"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micPushToKey ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micPushToKey: true }),
+              children: "Push to Key"
+            }
+          )
+        ] })
+      ] }),
+      settings.micPushToKey && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "キー" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.keyGroup, children: [
+          settings.micPushToKeyBind && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: styles.keyBadge, children: settings.micPushToKeyBind }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: styles.clearBtn, onClick: clearBind, title: "クリア", children: "×" })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.recordBtn} ${recording ? styles.recordBtnActive : ""}`,
+              onClick: () => setRecording((r) => !r),
+              children: recording ? "キー入力待ち..." : settings.micPushToKeyBind ? "変更" : "キーを記録"
+            }
+          )
+        ] })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "ピッチ・フォルマント" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "ピッチ",
+          desc: "声の高さ。+で高く、−で低くなる",
+          min: -12,
+          max: 12,
+          step: 1,
+          value: settings.micPitchSemitones,
+          valueLabel: semitoneLabel(settings.micPitchSemitones),
+          onChange: (v) => updateSettings({ micPitchSemitones: v })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "フォルマント",
+          desc: "声の太さと響き。+で細く明るく、−で太く暗くなる",
+          min: -12,
+          max: 12,
+          step: 1,
+          value: settings.micFormantSemitones,
+          valueLabel: semitoneLabel(settings.micFormantSemitones),
+          onChange: (v) => updateSettings({ micFormantSemitones: v })
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "イコライザー" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "Low",
+          desc: "低音域（ドスン・ズン系の音）の強弱",
+          min: -12,
+          max: 12,
+          step: 1,
+          value: settings.micEqLow,
+          valueLabel: dbLabel(settings.micEqLow),
+          onChange: (v) => updateSettings({ micEqLow: v })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "Mid",
+          desc: "中音域（声の芯となる帯域）の強弱",
+          min: -12,
+          max: 12,
+          step: 1,
+          value: settings.micEqMid,
+          valueLabel: dbLabel(settings.micEqMid),
+          onChange: (v) => updateSettings({ micEqMid: v })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "High",
+          desc: "高音域（シャリシャリ・サ行の音）の強弱",
+          min: -12,
+          max: 12,
+          step: 1,
+          value: settings.micEqHigh,
+          valueLabel: dbLabel(settings.micEqHigh),
+          onChange: (v) => updateSettings({ micEqHigh: v })
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "ディストーション" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micDistortionEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micDistortionEnabled: !settings.micDistortionEnabled }),
+              children: settings.micDistortionEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "声に電気的な歪みを加えてエレクトロ・ロック風にする" })
+      ] }),
+      settings.micDistortionEnabled && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Drive",
+            desc: "歪みの強さ。高いほど荒々しく激しい音になる",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micDistortionDrive,
+            valueLabel: `${settings.micDistortionDrive} %`,
+            onChange: (v) => updateSettings({ micDistortionDrive: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Mix",
+            desc: "元の声と歪んだ声の割合（0%=原音のみ、100%=歪みのみ）",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micDistortionMix,
+            valueLabel: `${settings.micDistortionMix} %`,
+            onChange: (v) => updateSettings({ micDistortionMix: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Tone",
+            desc: "歪み後の高音の量。低いとこもった音、高いと刺さる音",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micDistortionTone,
+            valueLabel: `${settings.micDistortionTone} %`,
+            onChange: (v) => updateSettings({ micDistortionTone: v })
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "コンプレッサー" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micCompressorEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micCompressorEnabled: !settings.micCompressorEnabled }),
+              children: settings.micCompressorEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "大きい音を自動で抑えて声の音量を均一にする" })
+      ] }),
+      settings.micCompressorEnabled && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Threshold",
+            desc: "この音量以上の声を圧縮する（低いほど小さい音も圧縮）",
+            min: -60,
+            max: 0,
+            step: 1,
+            value: settings.micCompressorThreshold,
+            valueLabel: `${settings.micCompressorThreshold} dB`,
+            onChange: (v) => updateSettings({ micCompressorThreshold: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Ratio",
+            desc: "圧縮の強さ（高いほど音量が均一になる）",
+            min: 1,
+            max: 20,
+            step: 1,
+            value: settings.micCompressorRatio,
+            valueLabel: `${settings.micCompressorRatio} : 1`,
+            onChange: (v) => updateSettings({ micCompressorRatio: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Attack",
+            desc: "圧縮が始まるまでの速さ（低いほど素早く反応）",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micCompressorAttack,
+            valueLabel: `${settings.micCompressorAttack} ms`,
+            onChange: (v) => updateSettings({ micCompressorAttack: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Release",
+            desc: "圧縮が解除されるまでの速さ（低いほど素早く元に戻る）",
+            min: 10,
+            max: 500,
+            step: 10,
+            value: settings.micCompressorRelease,
+            valueLabel: `${settings.micCompressorRelease} ms`,
+            onChange: (v) => updateSettings({ micCompressorRelease: v })
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "ラジオ効果" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micRadioEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micRadioEnabled: !settings.micRadioEnabled }),
+              children: settings.micRadioEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "電話帯域（300–3000 Hz）だけ通すトランシーバー風の音質" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "エコー" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micEchoEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micEchoEnabled: !settings.micEchoEnabled }),
+              children: settings.micEchoEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "声が一定時間後に繰り返されるやまびこ効果" })
+      ] }),
+      settings.micEchoEnabled && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Delay",
+            desc: "やまびこが返ってくるまでの時間",
+            min: 50,
+            max: 500,
+            step: 10,
+            value: settings.micEchoDelay,
+            valueLabel: `${settings.micEchoDelay} ms`,
+            onChange: (v) => updateSettings({ micEchoDelay: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Feedback",
+            desc: "繰り返しの回数（高いほど長く続く）",
+            min: 0,
+            max: 80,
+            step: 1,
+            value: settings.micEchoFeedback,
+            valueLabel: `${settings.micEchoFeedback} %`,
+            onChange: (v) => updateSettings({ micEchoFeedback: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Mix",
+            desc: "原音とエコー音の割合（0%=原音のみ、100%=エコーのみ）",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micEchoMix,
+            valueLabel: `${settings.micEchoMix} %`,
+            onChange: (v) => updateSettings({ micEchoMix: v })
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "リバーブ" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micReverbEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micReverbEnabled: !settings.micReverbEnabled }),
+              children: settings.micReverbEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "部屋やホールの残響をシミュレートして空間を演出する" })
+      ] }),
+      settings.micReverbEnabled && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Duration",
+            desc: "残響の長さ（長いほどホールのような響きになる）",
+            min: 0.5,
+            max: 4,
+            step: 0.1,
+            value: settings.micReverbDuration,
+            valueLabel: `${settings.micReverbDuration.toFixed(1)} s`,
+            onChange: (v) => updateSettings({ micReverbDuration: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Decay",
+            desc: "残響の減衰速度（高いほど素早く消える）",
+            min: 1,
+            max: 5,
+            step: 0.5,
+            value: settings.micReverbDecay,
+            valueLabel: `${settings.micReverbDecay}`,
+            onChange: (v) => updateSettings({ micReverbDecay: v })
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SliderRow,
+          {
+            label: "Mix",
+            desc: "原音と残響の割合（0%=原音のみ、100%=残響のみ）",
+            min: 0,
+            max: 100,
+            step: 1,
+            value: settings.micReverbMix,
+            valueLabel: `${settings.micReverbMix} %`,
+            onChange: (v) => updateSettings({ micReverbMix: v })
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: styles.section, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: styles.sectionTitle, children: "ロボット声" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.rowWrapper, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles.row, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: styles.label, children: "有効" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `${styles.modeBtn} ${settings.micRobotEnabled ? styles.modeBtnActive : ""}`,
+              onClick: () => updateSettings({ micRobotEnabled: !settings.micRobotEnabled }),
+              children: settings.micRobotEnabled ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: styles.paramDesc, children: "一定周波数の信号を掛け合わせて機械的・金属的な声にする" })
+      ] }),
+      settings.micRobotEnabled && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SliderRow,
+        {
+          label: "Frequency",
+          desc: "ロボット感の周波数（低いほど重い機械音、高いほど金属的）",
+          min: 50,
+          max: 300,
+          step: 5,
+          value: settings.micRobotFrequency,
+          valueLabel: `${settings.micRobotFrequency} Hz`,
+          onChange: (v) => updateSettings({ micRobotFrequency: v })
+        }
+      )
+    ] })
+  ] });
+}
+const mainTabBarStyle = {
+  display: "flex",
+  gap: 0,
+  borderBottom: "1px solid var(--border)",
+  background: "var(--bg-secondary)",
+  flexShrink: 0
+};
+function mainTabBtnStyle(active2) {
+  return {
+    padding: "8px 20px",
+    fontSize: 13,
+    fontWeight: 600,
+    background: "none",
+    border: "none",
+    borderBottom: active2 ? "2px solid var(--accent)" : "2px solid transparent",
+    color: active2 ? "var(--accent)" : "var(--text-secondary)",
+    cursor: "pointer",
+    transition: "color 0.15s, border-color 0.15s",
+    marginBottom: -1
+  };
+}
 function App() {
   const [settingsOpen, setSettingsOpen] = reactExports.useState(false);
+  const [mainTab, setMainTab] = reactExports.useState("soundboard");
   const loadFromData = useMp3Store((s) => s.loadFromData);
   const mp3s = useMp3Store((s) => s.mp3s);
   const presets = useMp3Store((s) => s.presets);
@@ -13651,10 +16141,20 @@ function App() {
   useShortcutListener();
   useFileDrop(activePresetId === "global" ? void 0 : activePresetId);
   useAudioEnded();
+  useMicController();
   reactExports.useEffect(() => {
-    window.api.storage.load().then((data) => {
+    window.api.storage.load().then(async (data) => {
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const outputIds = new Set(allDevices.filter((d) => d.kind === "audiooutput").map((d) => d.deviceId));
+      const inputIds = new Set(allDevices.filter((d) => d.kind === "audioinput").map((d) => d.deviceId));
+      const validOutputIds = (data.settings.outputDeviceIds ?? []).filter((id) => outputIds.has(id));
+      const validMicId = inputIds.has(data.settings.micDeviceId ?? "") ? data.settings.micDeviceId ?? "" : "";
       loadFromData(data);
-      loadSettings(data.settings);
+      data.mp3s.forEach((mp3) => {
+        if (mp3.keybinds.length > 0) audioManager.pinBuffer(mp3.filePath);
+      });
+      loadSettings({ ...DEFAULT_SETTINGS, ...data.settings, outputDeviceIds: validOutputIds, micDeviceId: validMicId });
+      audioManager.setOutputDevices(validOutputIds);
     });
   }, [loadFromData, loadSettings]);
   reactExports.useEffect(() => {
@@ -13664,15 +16164,28 @@ function App() {
     audioManager.setMasterVolume(settings.masterVolume);
   }, [settings.masterVolume]);
   reactExports.useEffect(() => {
+    audioManager.setOutputDevices(settings.outputDeviceIds);
+  }, [settings.outputDeviceIds]);
+  reactExports.useEffect(() => {
     const appData = { ...toAppData(), settings };
     window.api.storage.save(appData);
   }, [mp3s, presets, settings, toAppData]);
   const activePreset = presets.find((p) => p.id === activePresetId);
-  const visibleMp3s = activePresetId === "global" ? mp3s : mp3s.filter((m) => activePreset?.mp3Ids.includes(m.id));
+  const orderedMp3s = activePresetId === "global" ? (() => {
+    const globalPreset = presets.find((p) => p.id === "global");
+    if (!globalPreset) return visibleMp3s;
+    return globalPreset.mp3Ids.map((id) => mp3s.find((m) => m.id === id)).filter((m) => m !== void 0);
+  })() : (activePreset?.mp3Ids ?? []).map((id) => mp3s.find((m) => m.id === id)).filter((m) => m !== void 0);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", height: "100vh" }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Header, { onSettingsClick: () => setSettingsOpen(true) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(TabBar, {}),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Mp3List, { mp3s: visibleMp3s }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: mainTabBarStyle, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { style: mainTabBtnStyle(mainTab === "soundboard"), onClick: () => setMainTab("soundboard"), children: "サウンドボード" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { style: mainTabBtnStyle(mainTab === "voicechanger"), onClick: () => setMainTab("voicechanger"), children: "ボイスチェンジャー" })
+    ] }),
+    mainTab === "soundboard" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(TabBar, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Mp3List, { mp3s: orderedMp3s, activePresetId })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(VoiceChangerTab, {}),
     settingsOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(
       SettingsModal,
       {

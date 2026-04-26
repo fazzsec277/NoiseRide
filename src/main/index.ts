@@ -5,6 +5,9 @@ import { ShortcutManager } from './ShortcutManager'
 import { loadData, saveData } from './StorageManager'
 import type { AppData } from '../types'
 
+app.setName('NoiseRide')
+app.setAppUserModelId('com.noiseride.app')
+
 let shortcutManager: ShortcutManager | null = null
 
 function createWindow(): BrowserWindow {
@@ -13,6 +16,7 @@ function createWindow(): BrowserWindow {
     height: 650,
     minWidth: 700,
     minHeight: 500,
+    title: 'NoiseRide',
     backgroundColor: '#1a1a2e',
     icon: join(app.getAppPath(), 'icon/NoiseRide_icon.ico'),
     webPreferences: {

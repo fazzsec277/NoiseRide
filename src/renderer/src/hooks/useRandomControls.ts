@@ -28,6 +28,7 @@ export function useRandomControls(): {
       randomQueueManager.stop()
       useRandomStore.getState().setCurrentRandomPlayingId(null)
       useRandomStore.getState().setRandomActive(false)
+      useRandomStore.getState().setRandomLoadingId(null)
     }
     audioManager.stopAll()
     // stopAll の中で notifyEnded が各 id に対して呼ばれるが、
@@ -38,6 +39,7 @@ export function useRandomControls(): {
   }, [])
 
   const playNext = useCallback((): void => {
+    if (useRandomStore.getState().randomLoadingId !== null) return
     const id = randomQueueManager.getCurrentPlayingId()
     if (id) {
       // prepareForNextTrack を stop より先に呼ぶことで
@@ -51,6 +53,7 @@ export function useRandomControls(): {
   }, [])
 
   const playPrev = useCallback((): void => {
+    if (useRandomStore.getState().randomLoadingId !== null) return
     if (!randomQueueManager.hasPrevious()) return
     const currentId = randomQueueManager.getCurrentPlayingId()
     const prevId = randomQueueManager.getPrevious()
@@ -65,7 +68,9 @@ export function useRandomControls(): {
     }
     const mp3 = useMp3Store.getState().mp3s.find((m) => m.id === prevId)
     if (!mp3) return
+    useRandomStore.getState().setRandomLoadingId(prevId)
     audioManager.play(mp3, useSettingsStore.getState().settings).then((started) => {
+      useRandomStore.getState().setRandomLoadingId(null)
       if (started) useMp3Store.getState().setPlaying(prevId, true)
     })
   }, [])

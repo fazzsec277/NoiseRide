@@ -17,6 +17,7 @@ interface PlayingEntry {
   startOffset: number
   duration: number
   filePath: string
+  buffer: AudioBuffer
   fallbackTimeoutId?: ReturnType<typeof window.setTimeout>
 }
 
@@ -93,7 +94,7 @@ class AudioManager {
     return this.playing.size
   }
 
-  async play(mp3: Mp3Item, settings: Settings): Promise<boolean> {
+  async play(mp3: Mp3Item, settings: Settings): Promise<boolean | null> {
     if (this.playing.has(mp3.id) || this.pendingPlay.has(mp3.id)) return false
     if (this.playing.size >= settings.maxConcurrent) return false
     this.pendingPlay.add(mp3.id)
@@ -114,7 +115,7 @@ class AudioManager {
     }
 
     // stop() がロード中に呼ばれていた場合は中断
-    if (!this.pendingPlay.has(mp3.id)) return false
+    if (!this.pendingPlay.has(mp3.id)) return null
 
     // Create sources for all active contexts (buffer is reusable across contexts)
     for (const deviceId of this.activeDeviceIds) {
@@ -138,6 +139,7 @@ class AudioManager {
       startOffset: 0,
       duration: buffer.duration,
       filePath: mp3.filePath,
+      buffer,
     }
     this.playing.set(mp3.id, entry)
     this.pendingPlay.delete(mp3.id)
@@ -299,8 +301,7 @@ class AudioManager {
 
     const firstDeviceId = this.activeDeviceIds[0] ?? ''
     const firstCtxEntry = await this.getCtxEntry(firstDeviceId)
-    const buffer = this.bufferCache.get(entry.filePath)
-    if (!buffer) return
+    const buffer = entry.buffer
 
     const newDevices = new Map<string, DeviceEntry>()
     const clampedOffset = Math.max(0, Math.min(offset, entry.duration - 0.01))

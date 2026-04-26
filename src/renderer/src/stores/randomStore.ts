@@ -6,6 +6,8 @@ interface RandomState {
   isRandomActive: boolean
   randomPresetName: string
   setRandomActive: (active: boolean, presetName?: string) => void
+  randomLoadingId: string | null
+  setRandomLoadingId: (id: string | null) => void
 }
 
 export const useRandomStore = create<RandomState>((set) => ({
@@ -14,4 +16,6 @@ export const useRandomStore = create<RandomState>((set) => ({
   isRandomActive: false,
   randomPresetName: '',
   setRandomActive: (active, presetName = '') => set({ isRandomActive: active, randomPresetName: presetName }),
+  randomLoadingId: null,
+  setRandomLoadingId: (id) => set({ randomLoadingId: id }),
 }))

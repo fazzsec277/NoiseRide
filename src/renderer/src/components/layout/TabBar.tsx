@@ -5,6 +5,7 @@ import { audioManager } from '../../managers/AudioManager'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useRandomStore } from '../../stores/randomStore'
 import { useRandomControls } from '../../hooks/useRandomControls'
+import { playNextRandom } from '../../hooks/useAudioEnded'
 import { GLOBAL_PRESET_ID } from '@shared/types'
 import styles from './TabBar.module.css'
 
@@ -26,9 +27,12 @@ export function TabBar(): JSX.Element {
   const { playPrev, playNext, stopAll } = useRandomControls()
   const isRandom = useRandomStore((s) => s.isRandomActive)
   const randomPresetName = useRandomStore((s) => s.randomPresetName)
+  const randomLoadingId = useRandomStore((s) => s.randomLoadingId)
   const [editingPreset, setEditingPreset] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const editRef = useRef<HTMLInputElement>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Preset drag state
   const dragPresetIdx = useRef<number | null>(null)
@@ -76,6 +80,22 @@ export function TabBar(): JSX.Element {
     setEditingPreset(null)
   }
 
+  const handleDeleteClick = (e: React.MouseEvent, id: string): void => {
+    e.stopPropagation()
+    if (confirmDeleteId === id) {
+      if (confirmTimerRef.current) { clearTimeout(confirmTimerRef.current); confirmTimerRef.current = null }
+      setConfirmDeleteId(null)
+      removePreset(id)
+    } else {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+      setConfirmDeleteId(id)
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmDeleteId(null)
+        confirmTimerRef.current = null
+      }, 2000)
+    }
+  }
+
   const handleAddFiles = async (): Promise<void> => {
     const filePaths = await window.api.dialog.openMp3()
     if (filePaths.length === 0) return
@@ -93,6 +113,7 @@ export function TabBar(): JSX.Element {
       randomQueueManager.stop()
       useRandomStore.getState().setCurrentRandomPlayingId(null)
       useRandomStore.getState().setRandomActive(false)
+      useRandomStore.getState().setRandomLoadingId(null)
       if (idToStop) {
         audioManager.stop(idToStop)
         setPlaying(idToStop, false)
@@ -103,7 +124,7 @@ export function TabBar(): JSX.Element {
         activePresetId === GLOBAL_PRESET_ID
           ? mp3s.map((m) => m.id)
           : activePreset?.mp3Ids ?? []
-      const ids = allIds.filter((id) => !mp3s.find((m) => m.id === id)?.loop)
+      const ids = allIds.filter((id: string) => !mp3s.find((m) => m.id === id)?.loop)
       if (ids.length === 0) return
       const presetName = activePreset?.name ?? '全体'
       randomQueueManager.start(activePresetId, ids)
@@ -115,10 +136,16 @@ export function TabBar(): JSX.Element {
       if (!mp3) return
       randomQueueManager.setCurrentPlaying(nextId)
       useRandomStore.getState().setCurrentRandomPlayingId(nextId)
+      useRandomStore.getState().setRandomLoadingId(nextId)
       audioManager.play(mp3, settings).then((started) => {
+        useRandomStore.getState().setRandomLoadingId(null)
         if (started) {
           setPlaying(nextId, true)
+        } else if (started === false) {
+          // 選ばれたトラックが既に手動再生中 → スキップして次へ
+          playNextRandom()
         } else {
+          // null: ロード中にキャンセル（ランダム停止ボタン押下）→ 状態クリア
           randomQueueManager.clearCurrentPlaying()
           useRandomStore.getState().setCurrentRandomPlayingId(null)
         }
@@ -202,11 +229,11 @@ export function TabBar(): JSX.Element {
             )}
             {p.id !== GLOBAL_PRESET_ID && (
               <button
-                className={styles.tabClose}
-                onClick={(e) => { e.stopPropagation(); removePreset(p.id) }}
-                title="プリセット削除"
+                className={`${styles.tabClose} ${confirmDeleteId === p.id ? styles.tabCloseConfirm : ''}`}
+                onClick={(e) => handleDeleteClick(e, p.id)}
+                title={confirmDeleteId === p.id ? 'もう一度クリックで削除' : 'プリセット削除'}
               >
-                ×
+                {confirmDeleteId === p.id ? '!' : '×'}
               </button>
             )}
           </div>
@@ -228,7 +255,7 @@ export function TabBar(): JSX.Element {
           <button
             className={styles.pillSkip}
             onClick={playPrev}
-            disabled={!isRandom || !randomQueueManager.hasPrevious()}
+            disabled={!isRandom || !randomQueueManager.hasPrevious() || randomLoadingId !== null}
             title="前の曲"
           >«</button>
           <div className={styles.pillDivider} />
@@ -243,7 +270,7 @@ export function TabBar(): JSX.Element {
           <button
             className={styles.pillSkip}
             onClick={playNext}
-            disabled={!isRandom}
+            disabled={!isRandom || randomLoadingId !== null}
             title="次の曲"
           >»</button>
         </div>

@@ -250,6 +250,8 @@ function loadData() {
 function saveData(data) {
   fs.writeFileSync(getDataFile(), JSON.stringify(data, null, 2), "utf-8");
 }
+electron.app.setName("NoiseRide");
+electron.app.setAppUserModelId("com.noiseride.app");
 let shortcutManager = null;
 function createWindow() {
   const win = new electron.BrowserWindow({
@@ -257,6 +259,7 @@ function createWindow() {
     height: 650,
     minWidth: 700,
     minHeight: 500,
+    title: "NoiseRide",
     backgroundColor: "#1a1a2e",
     icon: path.join(electron.app.getAppPath(), "icon/NoiseRide_icon.ico"),
     webPreferences: {

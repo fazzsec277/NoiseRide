@@ -30,11 +30,13 @@ interface Props {
 export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
   const updateMp3Name = useMp3Store((s) => s.updateMp3Name)
   const setPlaying = useMp3Store((s) => s.setPlaying)
+  const setLoading = useMp3Store((s) => s.setLoading)
   const updateVolume = useMp3Store((s) => s.updateVolume)
   const toggleLoop = useMp3Store((s) => s.toggleLoop)
   const toggleRestart = useMp3Store((s) => s.toggleRestart)
   const settings = useSettingsStore((s) => s.settings)
   const isRandomPlaying = useRandomStore((s) => s.currentRandomPlayingId === mp3.id)
+  const isRandomLoading = useRandomStore((s) => s.randomLoadingId === mp3.id)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
@@ -89,12 +91,14 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
       setPlaying(mp3.id, false)
     } else {
       setIsLoading(true)
+      setLoading(mp3.id, true)
       audioManager.play(mp3, settings)
         .then((started) => {
           setIsLoading(false)
+          setLoading(mp3.id, false)
           if (started) setPlaying(mp3.id, true)
         })
-        .catch(() => setIsLoading(false))
+        .catch(() => { setIsLoading(false); setLoading(mp3.id, false) })
     }
   }
 
@@ -117,12 +121,12 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
 
       <div className={styles.colName}>
         <button
-          className={`${styles.playBtn} ${mp3.isPlaying ? (isRandomPlaying ? styles.randomPlayingBtn : styles.playingBtn) : ''} ${isLoading ? styles.loadingBtn : ''}`}
+          className={`${styles.playBtn} ${mp3.isPlaying ? (isRandomPlaying ? styles.randomPlayingBtn : styles.playingBtn) : ''} ${(isLoading || isRandomLoading) ? styles.loadingBtn : ''}`}
           onClick={handlePlay}
-          disabled={isLoading}
-          title={isLoading ? '読み込み中...' : mp3.isPlaying ? '停止' : '再生'}
+          disabled={isLoading || isRandomLoading}
+          title={(isLoading || isRandomLoading) ? '読み込み中...' : mp3.isPlaying ? '停止' : '再生'}
         >
-          {mp3.isPlaying ? '■' : isLoading ? <span className={styles.loadingIcon}>↻</span> : '▶'}
+          {mp3.isPlaying ? '■' : (isLoading || isRandomLoading) ? <span className={styles.loadingIcon}>↻</span> : '▶'}
         </button>
         <Mp3NameEditor name={mp3.name} onSave={(n) => updateMp3Name(mp3.id, n)} />
       </div>
