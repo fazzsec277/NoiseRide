@@ -145,8 +145,8 @@
 .micIconMuted::after {
   content: '';
   position: absolute;
-  width: 18px;
-  height: 2px;
+  width: 15px;
+  height: 1px;
   background: #e53935;
   border-radius: 1px;
   transform: rotate(45deg);

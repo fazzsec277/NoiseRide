@@ -47,7 +47,9 @@
       "Bash(npm install *)",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm install --save-dev cross-env)",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm run build:win 2>&1)",
-      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm uninstall cross-env 2>&1)"
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community_2\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs;\" + $env:PATH; cd \"c:\\\\Users\\\\exia0\\\\Documents\\\\01_ClaudeCode\\\\NoiseRide\"; npm uninstall cross-env 2>&1)",
+      "Bash(grep -r \"c:/dev\\\\|c:\\\\\\\\\\\\\\\\dev\\\\|absolute.*path\\\\|C:/Users\" \"/c/dev/NoiseRide\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.json\")",
+      "Bash(grep -r \"/c/\\\\|C:\\\\\\\\\\\\\\\\\\\\|absolute\" \"/c/dev/NoiseRide/package.json\" \"/c/dev/NoiseRide/electron.vite.config.ts\")"
     ]
   }
 }
