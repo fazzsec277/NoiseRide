@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  height: 44px;
+  height: 54px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -88,17 +88,18 @@
 
 .tab {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 2px 8px 3px;
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
-  min-width: 0;
-  max-width: 140px;
+  min-width: 54px;
+  max-width: 120px;
   flex-shrink: 0;
 }
 
@@ -108,17 +109,117 @@
   color: var(--accent);
 }
 
+.tab.randomOn {
+  background: var(--random-bg);
+  border-color: var(--random-border);
+}
+
+.tab.active.randomOn {
+  background: color-mix(in srgb, var(--accent-light) 50%, var(--random-bg) 50%);
+  border-color: var(--random-color);
+}
+
 .tab:hover:not(.active) {
   background: var(--bg-hover);
 }
 
+/* タブ上段: プリセット名 + 削除ボタン */
+.tabTop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* タブ下段: ランダムコントロール */
+.tabBottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  margin-top: 1px;
+}
+
+/* ランダムON中のラベル色 */
+.tab.randomOn .tabLabel {
+  color: var(--random-color);
+}
+
+/* ランダムスキップボタン（« »） */
+.tabSkipBtn {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.tabSkipBtn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tabSkipBtn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.tab.randomOn .tabSkipBtn:not(:disabled) {
+  color: var(--random-color);
+}
+
+.tab.randomOn .tabSkipBtn:hover:not(:disabled) {
+  background: rgba(251, 146, 60, 0.15);
+}
+
+/* ランダムトグルボタン（⇄） */
+.tabRandomBtn {
+  width: 22px;
+  height: 16px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.tabRandomBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab.randomOn .tabRandomBtn {
+  color: var(--random-color);
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.tab.randomOn .tabRandomBtn:hover {
+  background: rgba(251, 146, 60, 0.22);
+}
+
 .tabLabel {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  text-align: center;
+  flex: 1;
 }
 
 .tabInput {
@@ -185,98 +286,6 @@
   flex-shrink: 0;
 }
 
-/* ── ピル型ランダムグループ ── */
-.pillGroup {
-  display: flex;
-  align-items: stretch;
-  border-radius: 20px;
-  overflow: hidden;
-  height: 30px;
-  border: 1px solid var(--border);
-  transition: border-color 0.2s, background 0.2s;
-  flex-shrink: 0;
-}
-
-.pillGroup.pillOn {
-  border-color: rgba(251, 146, 60, 0.4);
-  background: var(--random-bg);
-}
-
-.pillSkip {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 15px;
-  font-weight: 700;
-  padding: 0 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.pillSkip:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.pillGroup.pillOn .pillSkip {
-  color: var(--random-color);
-}
-
-.pillGroup.pillOn .pillSkip:hover:not(:disabled) {
-  background: rgba(251, 146, 60, 0.15);
-  color: var(--random-color);
-}
-
-.pillSkip:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.pillDivider {
-  width: 1px;
-  background: var(--border);
-  align-self: stretch;
-  flex-shrink: 0;
-  transition: background 0.2s;
-}
-
-.pillGroup.pillOn .pillDivider {
-  background: rgba(251, 146, 60, 0.25);
-}
-
-.pillRandom {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 0 14px;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s;
-}
-
-.pillRandom:hover {
-  color: var(--text-primary);
-}
-
-.pillGroup.pillOn .pillRandom {
-  color: var(--random-color);
-}
-
-.pillGroup.pillOn .pillRandom:hover {
-  color: var(--random-color);
-}
 
 .addFileBtn {
   padding: 5px 12px;

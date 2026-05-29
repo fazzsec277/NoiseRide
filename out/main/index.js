@@ -119,6 +119,7 @@ class ShortcutManager {
   randomPrevSpec = null;
   randomNextSpec = null;
   randomStopSpec = null;
+  lastPlayedSpec = null;
   constructor(win) {
     this.win = win;
     uiohookNapi.uIOhook.on("keydown", (e) => {
@@ -137,6 +138,7 @@ class ShortcutManager {
       if (matchSpec(this.randomPrevSpec)) this.win.webContents.send("random:prev");
       if (matchSpec(this.randomNextSpec)) this.win.webContents.send("random:next");
       if (matchSpec(this.randomStopSpec)) this.win.webContents.send("random:stop");
+      if (matchSpec(this.lastPlayedSpec)) this.win.webContents.send("lastPlayed:trigger");
     });
     uiohookNapi.uIOhook.on("keyup", (e) => {
       if (this.win.isDestroyed() || this.win.isFocused()) return;
@@ -155,6 +157,9 @@ class ShortcutManager {
     if (action === "prev") this.randomPrevSpec = spec;
     else if (action === "next") this.randomNextSpec = spec;
     else this.randomStopSpec = spec;
+  }
+  setLastPlayedKey(accelerator) {
+    this.lastPlayedSpec = acceleratorToSpec(accelerator);
   }
   syncKeybinds(keybindMap) {
     this.shortcuts.clear();
@@ -329,6 +334,9 @@ electron.ipcMain.handle("random:setNextKey", (_e, acc) => {
 });
 electron.ipcMain.handle("random:setStopKey", (_e, acc) => {
   shortcutManager?.setRandomKey("stop", acc);
+});
+electron.ipcMain.handle("lastPlayed:setKey", (_e, acc) => {
+  shortcutManager?.setLastPlayedKey(acc);
 });
 electron.ipcMain.handle("file:readBuffer", (_e, filePath) => {
   return fs.readFileSync(filePath);

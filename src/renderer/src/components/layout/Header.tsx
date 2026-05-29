@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { audioManager } from '../../managers/AudioManager'
 import { micManager } from '../../managers/MicManager'
-import { randomQueueManager } from '../../managers/RandomQueueManager'
+import { randomRegistry } from '../../managers/RandomQueueManager'
 import { useRandomStore } from '../../stores/randomStore'
 import styles from './Header.module.css'
 
@@ -109,9 +109,8 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
   }
 
   const toggleAudioDevice = (deviceId: string): void => {
-    randomQueueManager.stop()
-    useRandomStore.getState().setCurrentRandomPlayingId(null)
-    useRandomStore.getState().setRandomActive(false)
+    randomRegistry.stopAll()
+    useRandomStore.getState().clearAll()
     audioManager.stopAll()
 
     const next = selectedIds.includes(deviceId)
@@ -136,7 +135,13 @@ export function Header({ onSettingsClick }: Props): JSX.Element {
 
   const handleMicGainChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const gain = parseFloat(e.target.value)
-    updateSettings({ micInputGain: gain })
+    if (settings.micMuted && gain > 0) {
+      updateSettings({ micMuted: false, micInputGain: gain })
+      micManager.setMuted(false)
+    } else {
+      updateSettings({ micInputGain: gain })
+    }
+    preMuteMicGain.current = gain
     micManager.setGain(gain)
   }
 

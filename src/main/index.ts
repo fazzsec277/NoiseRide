@@ -111,6 +111,11 @@ ipcMain.handle('random:setStopKey', (_e, acc: string): void => {
   shortcutManager?.setRandomKey('stop', acc)
 })
 
+// ── Last Played IPC ──────────────────────────────────────────
+ipcMain.handle('lastPlayed:setKey', (_e, acc: string): void => {
+  shortcutManager?.setLastPlayedKey(acc)
+})
+
 // ── File Buffer IPC ──────────────────────────────────────────
 ipcMain.handle('file:readBuffer', (_e, filePath: string): Buffer => {
   return readFileSync(filePath)

@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NoiseRide – 並列ランダム再生 UI モック</title>
+<style>
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --bg-hover: #1e2a4a;
+  --text-primary: #e0e0f0;
+  --text-secondary: #a0a0c0;
+  --text-muted: #6060a0;
+  --accent: #7c4dff;
+  --accent-hover: #9c6dff;
+  --accent-light: rgba(124, 77, 255, 0.15);
+  --success: #00e676;
+  --danger: #ff5252;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --playing-bg: rgba(0, 230, 118, 0.08);
+  --playing-border: rgba(0, 230, 118, 0.4);
+  --random-color: #fb923c;
+  --random-bg: rgba(251, 146, 60, 0.07);
+  --random-border: rgba(251, 146, 60, 0.3);
+  --radius: 8px;
+  --radius-sm: 4px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  user-select: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+}
+
+/* ─── Layout ─── */
+.app {
+  width: 780px;
+  margin: 40px auto;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-hover);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* ─── Header ─── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.device-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.mic-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── TabBar ─── */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 44px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.tab-area {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 6px 0;
+  scrollbar-width: none;
+}
+
+/* ─── Tab（通常） ─── */
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+  height: 30px;
+}
+
+.tab.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tab.random-on {
+  background: var(--random-bg);
+  border-color: var(--random-border);
+}
+
+.tab.active.random-on {
+  background: color-mix(in srgb, var(--accent-light) 50%, var(--random-bg) 50%);
+  border-color: var(--random-color);
+}
+
+.tab:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.tab-label {
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── タブ内ランダムコントロール ─── */
+.tab-random-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 2px;
+}
+
+.tab-random-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.tab-random-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab-random-btn.random-toggle.on {
+  color: var(--random-color);
+  background: rgba(251, 146, 60, 0.15);
+}
+
+.tab-random-btn.skip-btn {
+  font-size: 12px;
+}
+
+.tab-random-btn.skip-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.tab.random-on .tab-random-btn.skip-btn {
+  color: var(--random-color);
+}
+
+.tab.random-on .tab-random-btn.skip-btn:hover:not(:disabled) {
+  background: rgba(251, 146, 60, 0.15);
+}
+
+/* ランダムON中のタブのラベル色 */
+.tab.random-on .tab-label {
+  color: var(--random-color);
+}
+
+.tab-close {
+  width: 16px;
+  height: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  margin-left: 1px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.tab-close:hover {
+  color: var(--danger);
+  background: rgba(255, 82, 82, 0.12);
+}
+
+.add-tab {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.add-tab:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* ─── Actions（右側） ─── */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.stop-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.stop-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.kb-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.add-file-btn {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.add-file-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ─── MP3 List ─── */
+.mp3-list {
+  background: var(--bg-primary);
+}
+
+.list-header {
+  display: grid;
+  grid-template-columns: 24px 1fr 200px 110px 110px 70px 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 24px 1fr 200px 110px 110px 70px 40px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  transition: background 0.15s;
+}
+
+.row:hover { background: var(--bg-hover); }
+.row.playing { background: var(--playing-bg); border-bottom-color: var(--playing-border); }
+.row.random-playing { background: var(--random-bg); border-bottom-color: var(--random-border); }
+
+.col-drag {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.col-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s;
+}
+
+.play-btn.playing-btn { background: var(--success); color: #000; border-color: var(--success); }
+.play-btn.random-btn { background: var(--random-color); color: #000; border-color: var(--random-color); }
+
+.track-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.row.random-playing .track-name { color: var(--random-color); }
+
+.keybind-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'Consolas', monospace;
+}
+
+.col-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.volume-slider {
+  width: 64px;
+  height: 4px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.volume-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: 'Consolas', monospace;
+}
+
+.col-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn.on {
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* シークバー */
+.seek-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--bg-tertiary);
+}
+
+.seek-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.seek-fill.random {
+  background: var(--random-color);
+}
+
+/* ─── 説明パネル ─── */
+.note-panel {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.note-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.note-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.note-badge.new {
+  background: rgba(251, 146, 60, 0.2);
+  color: var(--random-color);
+  border: 1px solid var(--random-border);
+}
+
+.note-badge.removed {
+  background: rgba(255, 82, 82, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
+.note-badge.unchanged {
+  background: rgba(0, 230, 118, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+/* interactive */
+.tab { cursor: pointer; }
+.tab-random-btn { cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div style="padding: 20px 0; text-align: center; color: var(--text-muted); font-size: 12px; letter-spacing: 0.05em;">
+  NoiseRide — 並列ランダム再生 UI モック（インタラクティブ）
+</div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span class="app-title">NoiseRide</span>
+      <select class="device-select">
+        <option>スピーカー (Realtek HD Audio)</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="mic-btn">🎙</button>
+    </div>
+  </div>
+
+  <!-- TabBar -->
+  <div class="tab-bar">
+    <div class="tab-area">
+      <div class="tabs" id="tabs">
+
+        <!-- 全体タブ（アクティブ、ランダムOFF） -->
+        <div class="tab active" id="tab-global" onclick="activateTab('global')">
+          <span class="tab-label">全体</span>
+          <div class="tab-random-controls">
+            <button class="tab-random-btn skip-btn" id="prev-global" disabled title="前の曲">«</button>
+            <button class="tab-random-btn random-toggle" id="toggle-global" onclick="event.stopPropagation(); toggleRandom('global')" title="ランダム再生">⇄</button>
+            <button class="tab-random-btn skip-btn" id="next-global" disabled title="次の曲">»</button>
+          </div>
+        </div>
+
+        <!-- プリセット1（ランダムON ＋ アクティブ） -->
+        <div class="tab random-on" id="tab-preset1" onclick="activateTab('preset1')">
+          <span class="tab-label">BGM</span>
+          <div class="tab-random-controls">
+            <button class="tab-random-btn skip-btn" id="prev-preset1" title="前の曲" onclick="event.stopPropagation()">«</button>
+            <button class="tab-random-btn random-toggle on" id="toggle-preset1" onclick="event.stopPropagation(); toggleRandom('preset1')" title="ランダム再生停止">⇄</button>
+            <button class="tab-random-btn skip-btn" id="next-preset1" title="次の曲" onclick="event.stopPropagation()">»</button>
+          </div>
+          <button class="tab-close" onclick="event.stopPropagation()">×</button>
+        </div>
+
+        <!-- プリセット2（ランダムON） -->
+        <div class="tab random-on" id="tab-preset2" onclick="activateTab('preset2')">
+          <span class="tab-label">SE</span>
+          <div class="tab-random-controls">
+            <button class="tab-random-btn skip-btn" id="prev-preset2" title="前の曲" onclick="event.stopPropagation()">«</button>
+            <button class="tab-random-btn random-toggle on" id="toggle-preset2" onclick="event.stopPropagation(); toggleRandom('preset2')" title="ランダム再生停止">⇄</button>
+            <button class="tab-random-btn skip-btn" id="next-preset2" title="次の曲" onclick="event.stopPropagation()">»</button>
+          </div>
+          <button class="tab-close" onclick="event.stopPropagation()">×</button>
+        </div>
+
+        <!-- プリセット3（ランダムOFF） -->
+        <div class="tab" id="tab-preset3" onclick="activateTab('preset3')">
+          <span class="tab-label">アンビ</span>
+          <div class="tab-random-controls">
+            <button class="tab-random-btn skip-btn" id="prev-preset3" disabled title="前の曲">«</button>
+            <button class="tab-random-btn random-toggle" id="toggle-preset3" onclick="event.stopPropagation(); toggleRandom('preset3')" title="ランダム再生">⇄</button>
+            <button class="tab-random-btn skip-btn" id="next-preset3" disabled title="次の曲">»</button>
+          </div>
+          <button class="tab-close" onclick="event.stopPropagation()">×</button>
+        </div>
+
+        <button class="add-tab" title="プリセット追加">+</button>
+      </div>
+    </div>
+
+    <!-- Actions（ランダムpillGroupは削除済み） -->
+    <div class="actions">
+      <button class="stop-btn" onclick="stopAll()">全停止 ■</button>
+      <button class="kb-btn">KB: ON</button>
+      <button class="add-file-btn">+ 追加</button>
+    </div>
+  </div>
+
+  <!-- MP3 List -->
+  <div class="mp3-list">
+    <div class="list-header">
+      <span></span>
+      <span>名前</span>
+      <span>キー</span>
+      <span>長さ</span>
+      <span>音量</span>
+      <span>状態</span>
+      <span></span>
+    </div>
+
+    <!-- ランダム再生中（プリセット1） -->
+    <div class="row random-playing">
+      <span class="col-drag">⠿</span>
+      <div class="col-name">
+        <button class="play-btn random-btn">■</button>
+        <span class="track-name">forest_ambience_loop.mp3</span>
+      </div>
+      <div><span class="keybind-badge">F1</span></div>
+      <span class="duration">2:34</span>
+      <div class="col-volume">
+        <input type="range" class="volume-slider" value="80" min="0" max="100">
+        <span class="volume-label">80%</span>
+      </div>
+      <div class="col-status">
+        <button class="icon-btn">↺</button>
+        <button class="icon-btn">↩</button>
+      </div>
+      <div class="col-actions"><button class="menu-btn">⋮</button></div>
+      <div class="seek-bar"><div class="seek-fill random" style="width:38%"></div></div>
+    </div>
+
+    <!-- 通常再生中 -->
+    <div class="row playing">
+      <span class="col-drag">⠿</span>
+      <div class="col-name">
+        <button class="play-btn playing-btn">■</button>
+        <span class="track-name">rain_light.mp3</span>
+      </div>
+      <div><span class="keybind-badge">F2</span></div>
+      <span class="duration">1:12</span>
+      <div class="col-volume">
+        <input type="range" class="volume-slider" value="65" min="0" max="100">
+        <span class="volume-label">65%</span>
+      </div>
+      <div class="col-status">
+        <button class="icon-btn on">↺</button>
+        <button class="icon-btn">↩</button>
+      </div>
+      <div class="col-actions"><button class="menu-btn">⋮</button></div>
+      <div class="seek-bar"><div class="seek-fill" style="width:62%"></div></div>
+    </div>
+
+    <!-- ランダム再生中（プリセット2） -->
+    <div class="row random-playing">
+      <span class="col-drag">⠿</span>
+      <div class="col-name">
+        <button class="play-btn random-btn">■</button>
+        <span class="track-name">door_knock_01.mp3</span>
+      </div>
+      <div></div>
+      <span class="duration">0:03</span>
+      <div class="col-volume">
+        <input type="range" class="volume-slider" value="90" min="0" max="100">
+        <span class="volume-label">90%</span>
+      </div>
+      <div class="col-status">
+        <button class="icon-btn">↺</button>
+        <button class="icon-btn">↩</button>
+      </div>
+      <div class="col-actions"><button class="menu-btn">⋮</button></div>
+      <div class="seek-bar"><div class="seek-fill random" style="width:75%"></div></div>
+    </div>
+
+    <!-- 通常（停止中） -->
+    <div class="row">
+      <span class="col-drag">⠿</span>
+      <div class="col-name">
+        <button class="play-btn">▶</button>
+        <span class="track-name">city_night_ambience.mp3</span>
+      </div>
+      <div><span class="keybind-badge">F3</span></div>
+      <span class="duration">3:45</span>
+      <div class="col-volume">
+        <input type="range" class="volume-slider" value="70" min="0" max="100">
+        <span class="volume-label">70%</span>
+      </div>
+      <div class="col-status">
+        <button class="icon-btn">↺</button>
+        <button class="icon-btn">↩</button>
+      </div>
+      <div class="col-actions"><button class="menu-btn">⋮</button></div>
+      <div class="seek-bar"><div class="seek-fill" style="width:0%"></div></div>
+    </div>
+
+    <!-- 通常（停止中） -->
+    <div class="row">
+      <span class="col-drag">⠿</span>
+      <div class="col-name">
+        <button class="play-btn">▶</button>
+        <span class="track-name">thunder_distant.mp3</span>
+      </div>
+      <div></div>
+      <span class="duration">0:08</span>
+      <div class="col-volume">
+        <input type="range" class="volume-slider" value="100" min="0" max="100">
+        <span class="volume-label">100%</span>
+      </div>
+      <div class="col-status">
+        <button class="icon-btn">↺</button>
+        <button class="icon-btn">↩</button>
+      </div>
+      <div class="col-actions"><button class="menu-btn">⋮</button></div>
+      <div class="seek-bar"><div class="seek-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- 変更説明パネル -->
+  <div class="note-panel">
+    <div class="note-title">変更ポイント</div>
+    <div class="note-items">
+      <div class="note-item">
+        <span class="note-badge new">NEW</span>
+        <span>各プリセットタブ内に <strong>[«][⇄][»]</strong> を配置。⇄ クリックでそのプリセットのランダム再生をON/OFF。</span>
+      </div>
+      <div class="note-item">
+        <span class="note-badge new">NEW</span>
+        <span>ランダムON中のタブはオレンジでハイライト。複数タブが同時にオレンジになることで並列再生が一目でわかる。</span>
+      </div>
+      <div class="note-item">
+        <span class="note-badge new">NEW</span>
+        <span>ランダム再生中のMP3行はオレンジ背景。複数プリセットが並列再生中の場合、複数行が同時にオレンジになる。</span>
+      </div>
+      <div class="note-item">
+        <span class="note-badge removed">REMOVED</span>
+        <span>TabBar右側のグローバルな <strong>[ « ⇄ ランダム » ]</strong> pill グループを削除。</span>
+      </div>
+      <div class="note-item">
+        <span class="note-badge unchanged">UNCHANGED</span>
+        <span>全停止 ■ は全プリセットのランダム再生を一括停止。KB:ON / + 追加 は変更なし。</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // 現在のランダム状態
+  const randomState = {
+    global: false,
+    preset1: true,
+    preset2: true,
+    preset3: false
+  };
+
+  let activeTabId = 'global';
+
+  function activateTab(id) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    activeTabId = id;
+  }
+
+  function toggleRandom(presetId) {
+    randomState[presetId] = !randomState[presetId];
+    const tab = document.getElementById('tab-' + presetId);
+    const toggleBtn = document.getElementById('toggle-' + presetId);
+    const prevBtn = document.getElementById('prev-' + presetId);
+    const nextBtn = document.getElementById('next-' + presetId);
+
+    if (randomState[presetId]) {
+      tab.classList.add('random-on');
+      toggleBtn.classList.add('on');
+      toggleBtn.title = 'ランダム再生停止';
+      prevBtn.disabled = false;
+      nextBtn.disabled = false;
+    } else {
+      tab.classList.remove('random-on');
+      toggleBtn.classList.remove('on');
+      toggleBtn.title = 'ランダム再生';
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+    }
+  }
+
+  function stopAll() {
+    Object.keys(randomState).forEach(id => {
+      if (randomState[id]) toggleRandom(id);
+    });
+  }
+
+  // 初期状態を反映
+  activateTab('global');
+</script>
+</body>
+</html>

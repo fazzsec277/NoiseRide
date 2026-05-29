@@ -1,7 +1,15 @@
+.wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
 .container {
   flex: 1;
   overflow-y: auto;
-  background: var(--bg-primary);
+  min-height: 0;
 }
 
 .empty {
@@ -30,9 +38,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex-shrink: 0;
 }
 
 .colDrag,
@@ -79,4 +85,15 @@
 .sortArrow {
   font-size: 9px;
   opacity: 0.8;
+}
+
+.colActions {
+  justify-content: center;
+}
+
+.colRandomSortDisabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+  justify-content: center;
 }

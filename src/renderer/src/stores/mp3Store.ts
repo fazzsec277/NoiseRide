@@ -23,6 +23,9 @@ interface Mp3State {
   loadingIds: string[]
   setLoading: (id: string, loading: boolean) => void
 
+  lastManualPlayedId: string | null
+  setLastManualPlayedId: (id: string | null) => void
+
   addMp3s: (filePaths: string[], targetPresetId?: string) => Mp3Item[]
   removeMp3: (id: string) => void
   removeFromPreset: (id: string, presetId: string) => void
@@ -58,6 +61,9 @@ export const useMp3Store = create<Mp3State>((set, get) => ({
       ? s.loadingIds.includes(id) ? s.loadingIds : [...s.loadingIds, id]
       : s.loadingIds.filter((i) => i !== id)
   })),
+
+  lastManualPlayedId: null,
+  setLastManualPlayedId: (id) => set({ lastManualPlayedId: id }),
 
   addMp3s: (filePaths, targetPresetId) => {
     const newItems: Mp3Item[] = filePaths.map((fp) => ({

@@ -32,36 +32,31 @@ export function Mp3NameEditor({ name, onSave }: Props): JSX.Element {
 
   if (editing) {
     return (
-      <span className={styles.editWrapper}>
-        <input
-          ref={inputRef}
-          className={styles.input}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') cancel()
-            e.stopPropagation()
-          }}
-          onClick={(e) => e.stopPropagation()}
-        />
-        <button className={styles.confirmBtn} onMouseDown={commit} title="確定">✓</button>
-        <button className={styles.cancelBtn} onMouseDown={cancel} title="キャンセル">✕</button>
-      </span>
+      <input
+        ref={inputRef}
+        className={styles.input}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') cancel()
+          e.stopPropagation()
+        }}
+        onClick={(e) => e.stopPropagation()}
+      />
     )
   }
 
   return (
     <span className={styles.displayWrapper}>
-      <span className={styles.nameText} title={name}>{name}</span>
-      <button
-        className={styles.editBtn}
-        onClick={(e) => { e.stopPropagation(); setEditing(true) }}
-        title="名前を変更"
+      <span
+        className={styles.nameText}
+        title={name}
+        onDoubleClick={(e) => { e.stopPropagation(); setEditing(true) }}
       >
-        ✏
-      </button>
+        {name}
+      </span>
     </span>
   )
 }

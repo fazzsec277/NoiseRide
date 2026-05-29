@@ -6,6 +6,7 @@ import { useShortcutListener } from './hooks/useShortcutListener'
 import { useFileDrop } from './hooks/useFileDrop'
 import { useAudioEnded } from './hooks/useAudioEnded'
 import { useMicController } from './hooks/useMicController'
+import { useLastPlayedListener } from './hooks/useLastPlayedListener'
 import { Header } from './components/layout/Header'
 import { TabBar } from './components/layout/TabBar'
 import { Mp3List } from './components/mp3/Mp3List'
@@ -37,6 +38,10 @@ interface Api {
     onPrev: (cb: () => void) => () => void
     onNext: (cb: () => void) => () => void
     onStop: (cb: () => void) => () => void
+  }
+  lastPlayed: {
+    setKey: (acc: string) => Promise<void>
+    onTrigger: (cb: () => void) => () => void
   }
   dialog: {
     openMp3: () => Promise<string[]>
@@ -89,6 +94,7 @@ export default function App(): JSX.Element {
   const updateSettings = useSettingsStore((s) => s.updateSettings)
 
   useShortcutListener()
+  useLastPlayedListener()
   useFileDrop(activePresetId === 'global' ? undefined : activePresetId)
   useAudioEnded()
   useMicController()

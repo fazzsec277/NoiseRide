@@ -3,7 +3,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useMp3Store } from '../stores/mp3Store'
 import { useRandomStore } from '../stores/randomStore'
 import { audioManager } from '../managers/AudioManager'
-import { randomQueueManager } from '../managers/RandomQueueManager'
+import { randomRegistry } from '../managers/RandomQueueManager'
 import { playNextRandom } from './useAudioEnded'
 
 function buildAccelerator(e: KeyboardEvent): string {
@@ -15,73 +15,82 @@ function buildAccelerator(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
-export function useRandomControls(): {
-  playPrev: () => void
-  playNext: () => void
-  stopAll: () => void
-} {
+export function playPresetNext(presetId: string): void {
+  const state = useRandomStore.getState()
+  if (state.presetStates[presetId]?.loadingId !== null) return
+  const manager = randomRegistry.get(presetId)
+  if (!manager) return
+  const id = manager.getCurrentPlayingId()
+  if (id) {
+    manager.prepareForNextTrack()
+    state.setCurrentPlayingId(presetId, null)
+    audioManager.stop(id)
+    useMp3Store.getState().setPlaying(id, false)
+  }
+  playNextRandom(presetId)
+}
+
+export function playPresetPrev(presetId: string): void {
+  const state = useRandomStore.getState()
+  if (state.presetStates[presetId]?.loadingId !== null) return
+  const manager = randomRegistry.get(presetId)
+  if (!manager || !manager.hasPrevious()) return
+  const currentId = manager.getCurrentPlayingId()
+  const prevId = manager.getPrevious()
+  if (!prevId) return
+  if (currentId) {
+    manager.setCurrentPlayingBack(prevId)
+    state.setCurrentPlayingId(presetId, prevId)
+    audioManager.stop(currentId)
+    useMp3Store.getState().setPlaying(currentId, false)
+  }
+  const mp3 = useMp3Store.getState().mp3s.find((m) => m.id === prevId)
+  if (!mp3) return
+  state.setLoadingId(presetId, prevId)
+  audioManager.play(mp3, useSettingsStore.getState().settings).then((started) => {
+    state.setLoadingId(presetId, null)
+    if (started) useMp3Store.getState().setPlaying(prevId, true)
+  })
+}
+
+export function useRandomControls(): { stopAll: () => void } {
   const settings = useSettingsStore((s) => s.settings)
 
   const stopAll = useCallback((): void => {
-    // ランダム再生中なら先にランダム状態をリセット（onEnded の連鎖を防ぐ）
-    if (randomQueueManager.active) {
-      randomQueueManager.stop()
-      useRandomStore.getState().setCurrentRandomPlayingId(null)
-      useRandomStore.getState().setRandomActive(false)
-      useRandomStore.getState().setRandomLoadingId(null)
+    const { presetStates } = useRandomStore.getState()
+    for (const presetId of Object.keys(presetStates)) {
+      if (!presetStates[presetId]?.isActive) continue
+      const manager = randomRegistry.get(presetId)
+      if (manager) {
+        const currentId = manager.getCurrentPlayingId()
+        manager.stop()
+        if (currentId) {
+          audioManager.stop(currentId)
+          useMp3Store.getState().setPlaying(currentId, false)
+        }
+      }
     }
+    randomRegistry.stopAll()
+    useRandomStore.getState().clearAll()
     audioManager.stopAll()
-    // stopAll の中で notifyEnded が各 id に対して呼ばれるが、
-    // randomQueueManager.active が false になっているため useAudioEnded は何もしない
     for (const id of useMp3Store.getState().mp3s.filter((m) => m.isPlaying).map((m) => m.id)) {
       useMp3Store.getState().setPlaying(id, false)
     }
   }, [])
 
-  const playNext = useCallback((): void => {
-    if (useRandomStore.getState().randomLoadingId !== null) return
-    const id = randomQueueManager.getCurrentPlayingId()
-    if (id) {
-      // prepareForNextTrack を stop より先に呼ぶことで
-      // onEnded の二重発火を防ぎつつ現在曲を playedHistory に積む
-      randomQueueManager.prepareForNextTrack()
-      useRandomStore.getState().setCurrentRandomPlayingId(null)
-      audioManager.stop(id)
-      useMp3Store.getState().setPlaying(id, false)
-    }
-    playNextRandom()
-  }, [])
-
-  const playPrev = useCallback((): void => {
-    if (useRandomStore.getState().randomLoadingId !== null) return
-    if (!randomQueueManager.hasPrevious()) return
-    const currentId = randomQueueManager.getCurrentPlayingId()
-    const prevId = randomQueueManager.getPrevious()
-    if (!prevId) return
-    if (currentId) {
-      // setCurrentPlayingBack で currentPlayingId を prevId に変えてから stop することで
-      // isCurrentRandom(currentId) = false になり useAudioEnded の連鎖を防ぐ
-      randomQueueManager.setCurrentPlayingBack(prevId)
-      useRandomStore.getState().setCurrentRandomPlayingId(prevId)
-      audioManager.stop(currentId)
-      useMp3Store.getState().setPlaying(currentId, false)
-    }
-    const mp3 = useMp3Store.getState().mp3s.find((m) => m.id === prevId)
-    if (!mp3) return
-    useRandomStore.getState().setRandomLoadingId(prevId)
-    audioManager.play(mp3, useSettingsStore.getState().settings).then((started) => {
-      useRandomStore.getState().setRandomLoadingId(null)
-      if (started) useMp3Store.getState().setPlaying(prevId, true)
-    })
-  }, [])
-
-  // グローバル IPC リスナー（アプリ背面時）
+  // グローバル IPC リスナー（アプリ背面時）— lastActivePresetId を対象に
   useEffect(() => {
-    const offPrev = window.api.random.onPrev(playPrev)
-    const offNext = window.api.random.onNext(playNext)
+    const offPrev = window.api.random.onPrev(() => {
+      const lastId = useRandomStore.getState().lastActivePresetId
+      if (lastId) playPresetPrev(lastId)
+    })
+    const offNext = window.api.random.onNext(() => {
+      const lastId = useRandomStore.getState().lastActivePresetId
+      if (lastId) playPresetNext(lastId)
+    })
     const offStop = window.api.random.onStop(stopAll)
     return () => { offPrev(); offNext(); offStop() }
-  }, [playPrev, playNext, stopAll])
+  }, [stopAll])
 
   // アプリフォーカス時のキーボードリスナー
   useEffect(() => {
@@ -90,13 +99,18 @@ export function useRandomControls(): {
       const target = e.target as HTMLElement
       if (target.closest('input, textarea, [contenteditable]')) return
       const acc = buildAccelerator(e)
-      if (settings.randomPrevBind && acc === settings.randomPrevBind) { e.preventDefault(); playPrev() }
-      else if (settings.randomNextBind && acc === settings.randomNextBind) { e.preventDefault(); playNext() }
-      else if (settings.randomStopBind && acc === settings.randomStopBind) { e.preventDefault(); stopAll() }
+      const lastId = useRandomStore.getState().lastActivePresetId
+      if (settings.randomPrevBind && acc === settings.randomPrevBind && lastId) {
+        e.preventDefault(); playPresetPrev(lastId)
+      } else if (settings.randomNextBind && acc === settings.randomNextBind && lastId) {
+        e.preventDefault(); playPresetNext(lastId)
+      } else if (settings.randomStopBind && acc === settings.randomStopBind) {
+        e.preventDefault(); stopAll()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [settings.randomPrevBind, settings.randomNextBind, settings.randomStopBind, playPrev, playNext, stopAll])
+  }, [settings.randomPrevBind, settings.randomNextBind, settings.randomStopBind, stopAll])
 
   // キーバインド変更時にメインプロセスへ登録
   useEffect(() => {
@@ -111,5 +125,5 @@ export function useRandomControls(): {
     if (settings.randomStopBind) window.api.random.setStopKey(settings.randomStopBind).catch(() => {})
   }, [settings.randomStopBind])
 
-  return { playPrev, playNext, stopAll }
+  return { stopAll }
 }

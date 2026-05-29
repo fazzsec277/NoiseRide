@@ -35,8 +35,12 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
   const toggleLoop = useMp3Store((s) => s.toggleLoop)
   const toggleRestart = useMp3Store((s) => s.toggleRestart)
   const settings = useSettingsStore((s) => s.settings)
-  const isRandomPlaying = useRandomStore((s) => s.currentRandomPlayingId === mp3.id)
-  const isRandomLoading = useRandomStore((s) => s.randomLoadingId === mp3.id)
+  const isRandomPlaying = useRandomStore((s) =>
+    Object.values(s.presetStates).some((ps) => ps.currentPlayingId === mp3.id)
+  )
+  const isRandomLoading = useRandomStore((s) =>
+    Object.values(s.presetStates).some((ps) => ps.loadingId === mp3.id)
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
@@ -96,7 +100,10 @@ export function Mp3ItemRow({ mp3, onHandlePointerDown }: Props): JSX.Element {
         .then((started) => {
           setIsLoading(false)
           setLoading(mp3.id, false)
-          if (started) setPlaying(mp3.id, true)
+          if (started) {
+            setPlaying(mp3.id, true)
+            useMp3Store.getState().setLastManualPlayedId(mp3.id)
+          }
         })
         .catch(() => { setIsLoading(false); setLoading(mp3.id, false) })
     }

@@ -54,6 +54,7 @@ export interface Settings {
   randomPrevBind: string
   randomNextBind: string
   randomStopBind: string
+  lastPlayedBind: string
   keybindEnabled: boolean
 }
 
@@ -101,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randomPrevBind: '',
   randomNextBind: '',
   randomStopBind: '',
+  lastPlayedBind: '',
   keybindEnabled: true
 }
 

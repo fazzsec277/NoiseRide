@@ -13,7 +13,7 @@ function buildAccelerator(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
-type RecordTarget = 'prev' | 'next' | 'stop' | null
+type RecordTarget = 'prev' | 'next' | 'stop' | 'lastPlayed' | null
 
 interface Props {
   settings: Settings
@@ -44,9 +44,12 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
       } else if (recording === 'next') {
         onUpdate({ randomNextBind: acc })
         window.api.random.setNextKey(acc).catch(() => {})
-      } else {
+      } else if (recording === 'stop') {
         onUpdate({ randomStopBind: acc })
         window.api.random.setStopKey(acc).catch(() => {})
+      } else if (recording === 'lastPlayed') {
+        onUpdate({ lastPlayedBind: acc })
+        window.api.lastPlayed.setKey(acc).catch(() => {})
       }
       setRecording(null)
     }
@@ -75,6 +78,10 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
     if (target === 'prev') onUpdate({ randomPrevBind: '' })
     else if (target === 'next') onUpdate({ randomNextBind: '' })
     else if (target === 'stop') onUpdate({ randomStopBind: '' })
+    else if (target === 'lastPlayed') {
+      onUpdate({ lastPlayedBind: '' })
+      window.api.lastPlayed.setKey('').catch(() => {})
+    }
   }
 
   return (
@@ -140,6 +147,27 @@ export function SettingsModal({ settings, onUpdate, onClose }: Props): JSX.Eleme
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className={styles.shortcutSection}>
+            <div className={styles.shortcutLabel}>再生ショートカット</div>
+            <div className={styles.shortcutRow}>
+              <span className={styles.shortcutName}>最後に再生した曲</span>
+              <div className={styles.keyGroup}>
+                {settings.lastPlayedBind && (
+                  <>
+                    <span className={styles.keyBadge}>{settings.lastPlayedBind}</span>
+                    <button className={styles.clearBtn} onClick={() => clearBind('lastPlayed')} title="クリア">×</button>
+                  </>
+                )}
+                <button
+                  className={`${styles.recordBtn} ${recording === 'lastPlayed' ? styles.recordBtnActive : ''}`}
+                  onClick={() => setRecording((r) => (r === 'lastPlayed' ? null : 'lastPlayed'))}
+                >
+                  {recording === 'lastPlayed' ? 'キー入力待ち...' : settings.lastPlayedBind ? '変更' : 'キーを記録'}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className={styles.dangerZone}>

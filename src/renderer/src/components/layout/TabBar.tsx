@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useMp3Store } from '../../stores/mp3Store'
-import { randomQueueManager } from '../../managers/RandomQueueManager'
+import { randomRegistry } from '../../managers/RandomQueueManager'
 import { audioManager } from '../../managers/AudioManager'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useRandomStore } from '../../stores/randomStore'
-import { useRandomControls } from '../../hooks/useRandomControls'
+import { useRandomControls, playPresetNext, playPresetPrev } from '../../hooks/useRandomControls'
 import { playNextRandom } from '../../hooks/useAudioEnded'
 import { getAudioDuration } from '../../hooks/useFileDrop'
 import { GLOBAL_PRESET_ID } from '@shared/types'
@@ -25,21 +25,18 @@ export function TabBar(): JSX.Element {
   const updateSettings = useSettingsStore((s) => s.updateSettings)
   const setPlaying = useMp3Store((s) => s.setPlaying)
 
-  const { playPrev, playNext, stopAll } = useRandomControls()
-  const isRandom = useRandomStore((s) => s.isRandomActive)
-  const randomPresetName = useRandomStore((s) => s.randomPresetName)
-  const randomLoadingId = useRandomStore((s) => s.randomLoadingId)
+  const { stopAll } = useRandomControls()
+  const presetStates = useRandomStore((s) => s.presetStates)
+
   const [editingPreset, setEditingPreset] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const editRef = useRef<HTMLInputElement>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Preset drag state
   const dragPresetIdx = useRef<number | null>(null)
   const [dropPresetIdx, setDropPresetIdx] = useState<number | null>(null)
 
-  // Tab scroll state
   const tabsRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -58,8 +55,15 @@ export function TabBar(): JSX.Element {
     el.addEventListener('scroll', updateScrollState)
     const ro = new ResizeObserver(updateScrollState)
     ro.observe(el)
+    const onWheel = (e: WheelEvent): void => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      el.scrollBy({ left: e.deltaY, behavior: 'smooth' })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       el.removeEventListener('scroll', updateScrollState)
+      el.removeEventListener('wheel', onWheel)
       ro.disconnect()
     }
   }, [updateScrollState, presets])
@@ -86,6 +90,14 @@ export function TabBar(): JSX.Element {
     if (confirmDeleteId === id) {
       if (confirmTimerRef.current) { clearTimeout(confirmTimerRef.current); confirmTimerRef.current = null }
       setConfirmDeleteId(null)
+      // ランダム再生中なら停止してから削除
+      if (presetStates[id]?.isActive) {
+        const manager = randomRegistry.get(id)
+        const currentId = manager?.getCurrentPlayingId() ?? null
+        randomRegistry.delete(id)
+        useRandomStore.getState().clearPreset(id)
+        if (currentId) { audioManager.stop(currentId); setPlaying(currentId, false) }
+      }
       removePreset(id)
     } else {
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
@@ -108,53 +120,51 @@ export function TabBar(): JSX.Element {
     }
   }
 
-  const toggleRandom = (): void => {
-    if (isRandom) {
-      const idToStop = randomQueueManager.getCurrentPlayingId()
-      randomQueueManager.stop()
-      useRandomStore.getState().setCurrentRandomPlayingId(null)
-      useRandomStore.getState().setRandomActive(false)
-      useRandomStore.getState().setRandomLoadingId(null)
-      if (idToStop) {
-        audioManager.stop(idToStop)
-        setPlaying(idToStop, false)
-      }
+  const toggleRandom = useCallback((presetId: string): void => {
+    const state = useRandomStore.getState()
+    const isActive = state.presetStates[presetId]?.isActive ?? false
+
+    if (isActive) {
+      const manager = randomRegistry.get(presetId)
+      const idToStop = manager?.getCurrentPlayingId() ?? null
+      randomRegistry.delete(presetId)
+      state.clearPreset(presetId)
+      if (idToStop) { audioManager.stop(idToStop); setPlaying(idToStop, false) }
     } else {
-      const activePreset = presets.find((p) => p.id === activePresetId)
+      const preset = presets.find((p) => p.id === presetId)
       const allIds =
-        activePresetId === GLOBAL_PRESET_ID
+        presetId === GLOBAL_PRESET_ID
           ? mp3s.map((m) => m.id)
-          : activePreset?.mp3Ids ?? []
+          : preset?.mp3Ids ?? []
       const ids = allIds.filter((id: string) => !mp3s.find((m) => m.id === id)?.loop)
       if (ids.length === 0) return
-      const presetName = activePreset?.name ?? '全体'
-      randomQueueManager.start(activePresetId, ids)
-      useRandomStore.getState().setRandomActive(true, presetName)
 
-      const nextId = randomQueueManager.getNext()
+      const manager = randomRegistry.getOrCreate(presetId)
+      manager.start(presetId, ids)
+      state.setPresetActive(presetId, true)
+      state.setLastActivePresetId(presetId)
+
+      const nextId = manager.getNext()
       if (!nextId) return
       const mp3 = mp3s.find((m) => m.id === nextId)
       if (!mp3) return
-      randomQueueManager.setCurrentPlaying(nextId)
-      useRandomStore.getState().setCurrentRandomPlayingId(nextId)
-      useRandomStore.getState().setRandomLoadingId(nextId)
+      manager.setCurrentPlaying(nextId)
+      state.setCurrentPlayingId(presetId, nextId)
+      state.setLoadingId(presetId, nextId)
       audioManager.play(mp3, settings).then((started) => {
-        useRandomStore.getState().setRandomLoadingId(null)
+        state.setLoadingId(presetId, null)
         if (started) {
           setPlaying(nextId, true)
         } else if (started === false) {
-          // 選ばれたトラックが既に手動再生中 → スキップして次へ
-          playNextRandom()
+          playNextRandom(presetId)
         } else {
-          // null: ロード中にキャンセル（ランダム停止ボタン押下）→ 状態クリア
-          randomQueueManager.clearCurrentPlaying()
-          useRandomStore.getState().setCurrentRandomPlayingId(null)
+          randomRegistry.get(presetId)?.clearCurrentPlaying()
+          state.setCurrentPlayingId(presetId, null)
         }
       })
     }
-  }
+  }, [mp3s, presets, settings, setPlaying])
 
-  // Preset drag handlers
   const onPresetDragStart = (idx: number): void => {
     dragPresetIdx.current = idx
   }
@@ -192,53 +202,83 @@ export function TabBar(): JSX.Element {
         >‹</button>
         <div className={`${styles.fadeLeft} ${canScrollLeft ? styles.fadeVisible : ''}`} />
         <div ref={tabsRef} className={styles.tabs}>
-        {presets.map((p, idx) => (
-          <div
-            key={p.id}
-            draggable={p.id !== GLOBAL_PRESET_ID}
-            onDragStart={() => onPresetDragStart(idx)}
-            onDragOver={(e) => onPresetDragOver(e, idx)}
-            onDrop={() => onPresetDrop(idx)}
-            onDragEnd={onPresetDragEnd}
-            className={[
-              styles.tab,
-              activePresetId === p.id ? styles.active : '',
-              dropPresetIdx === idx ? styles.dropTarget : ''
-            ].join(' ')}
-          >
-            {editingPreset === p.id ? (
-              <input
-                ref={editRef}
-                className={styles.tabInput}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={commitPresetRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitPresetRename()
-                  if (e.key === 'Escape') setEditingPreset(null)
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span
-                className={styles.tabLabel}
-                onClick={() => setActivePreset(p.id)}
-                onDoubleClick={() => handlePresetDblClick(p.id, p.name)}
-              >
-                {p.name}
-              </span>
-            )}
-            {p.id !== GLOBAL_PRESET_ID && (
-              <button
-                className={`${styles.tabClose} ${confirmDeleteId === p.id ? styles.tabCloseConfirm : ''}`}
-                onClick={(e) => handleDeleteClick(e, p.id)}
-                title={confirmDeleteId === p.id ? 'もう一度クリックで削除' : 'プリセット削除'}
-              >
-                {confirmDeleteId === p.id ? '!' : '×'}
-              </button>
-            )}
-          </div>
-        ))}
+        {presets.map((p, idx) => {
+          const isRandom = presetStates[p.id]?.isActive ?? false
+          const loadingId = presetStates[p.id]?.loadingId ?? null
+          const hasPrev = randomRegistry.get(p.id)?.hasPrevious() ?? false
+          return (
+            <div
+              key={p.id}
+              draggable={p.id !== GLOBAL_PRESET_ID}
+              onDragStart={() => onPresetDragStart(idx)}
+              onDragOver={(e) => onPresetDragOver(e, idx)}
+              onDrop={() => onPresetDrop(idx)}
+              onDragEnd={onPresetDragEnd}
+              className={[
+                styles.tab,
+                activePresetId === p.id ? styles.active : '',
+                isRandom ? styles.randomOn : '',
+                dropPresetIdx === idx ? styles.dropTarget : ''
+              ].join(' ')}
+            >
+              {/* 上段: プリセット名 + 削除ボタン */}
+              <div className={styles.tabTop}>
+                {editingPreset === p.id ? (
+                  <input
+                    ref={editRef}
+                    className={styles.tabInput}
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onBlur={commitPresetRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitPresetRename()
+                      if (e.key === 'Escape') setEditingPreset(null)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span
+                    className={styles.tabLabel}
+                    onClick={() => setActivePreset(p.id)}
+                    onDoubleClick={() => handlePresetDblClick(p.id, p.name)}
+                  >
+                    {p.name}
+                  </span>
+                )}
+                {p.id !== GLOBAL_PRESET_ID && (
+                  <button
+                    className={`${styles.tabClose} ${confirmDeleteId === p.id ? styles.tabCloseConfirm : ''}`}
+                    onClick={(e) => handleDeleteClick(e, p.id)}
+                    title={confirmDeleteId === p.id ? 'もう一度クリックで削除' : 'プリセット削除'}
+                  >
+                    {confirmDeleteId === p.id ? '!' : '×'}
+                  </button>
+                )}
+              </div>
+
+              {/* 下段: ランダムコントロール */}
+              <div className={styles.tabBottom}>
+                <button
+                  className={styles.tabSkipBtn}
+                  onClick={(e) => { e.stopPropagation(); playPresetPrev(p.id) }}
+                  disabled={!isRandom || !hasPrev || loadingId !== null}
+                  title="前の曲"
+                >«</button>
+                <button
+                  className={styles.tabRandomBtn}
+                  onClick={(e) => { e.stopPropagation(); toggleRandom(p.id) }}
+                  title={isRandom ? 'ランダム停止' : 'ランダム再生'}
+                >⇄</button>
+                <button
+                  className={styles.tabSkipBtn}
+                  onClick={(e) => { e.stopPropagation(); playPresetNext(p.id) }}
+                  disabled={!isRandom || loadingId !== null}
+                  title="次の曲"
+                >»</button>
+              </div>
+            </div>
+          )
+        })}
         <button className={styles.addTab} onClick={handleAddPreset} title="プリセット追加">
           +
         </button>
@@ -252,29 +292,6 @@ export function TabBar(): JSX.Element {
       </div>
 
       <div className={styles.actions}>
-        <div className={`${styles.pillGroup} ${isRandom ? styles.pillOn : ''}`}>
-          <button
-            className={styles.pillSkip}
-            onClick={playPrev}
-            disabled={!isRandom || !randomQueueManager.hasPrevious() || randomLoadingId !== null}
-            title="前の曲"
-          >«</button>
-          <div className={styles.pillDivider} />
-          <button
-            className={styles.pillRandom}
-            onClick={toggleRandom}
-            title="ランダム再生"
-          >
-            {isRandom ? `⇄ ${randomPresetName}` : '⇄ ランダム'}
-          </button>
-          <div className={styles.pillDivider} />
-          <button
-            className={styles.pillSkip}
-            onClick={playNext}
-            disabled={!isRandom || randomLoadingId !== null}
-            title="次の曲"
-          >»</button>
-        </div>
         <button className={styles.stopBtn} onClick={stopAll} title="全停止">全停止 ■</button>
         <button
           className={`${styles.kbToggleBtn} ${!settings.keybindEnabled ? styles.kbToggleOff : ''}`}

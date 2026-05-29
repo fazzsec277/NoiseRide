@@ -29,7 +29,10 @@ export function useShortcutListener(): void {
         continue
       }
       audioManager.play(mp3, currentSettings).then((started) => {
-        if (started) setPlaying(id, true)
+        if (started) {
+          setPlaying(id, true)
+          useMp3Store.getState().setLastManualPlayedId(id)
+        }
       })
     }
   }, [setPlaying])

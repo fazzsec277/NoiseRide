@@ -86,6 +86,7 @@ export class ShortcutManager {
   private randomPrevSpec: KeySpec | null = null
   private randomNextSpec: KeySpec | null = null
   private randomStopSpec: KeySpec | null = null
+  private lastPlayedSpec: KeySpec | null = null
 
   constructor(win: BrowserWindow) {
     this.win = win
@@ -122,6 +123,7 @@ export class ShortcutManager {
       if (matchSpec(this.randomPrevSpec)) this.win.webContents.send('random:prev')
       if (matchSpec(this.randomNextSpec)) this.win.webContents.send('random:next')
       if (matchSpec(this.randomStopSpec)) this.win.webContents.send('random:stop')
+      if (matchSpec(this.lastPlayedSpec)) this.win.webContents.send('lastPlayed:trigger')
     })
 
     uIOhook.on('keyup', (e) => {
@@ -144,6 +146,10 @@ export class ShortcutManager {
     if (action === 'prev') this.randomPrevSpec = spec
     else if (action === 'next') this.randomNextSpec = spec
     else this.randomStopSpec = spec
+  }
+
+  setLastPlayedKey(accelerator: string): void {
+    this.lastPlayedSpec = acceleratorToSpec(accelerator)
   }
 
   syncKeybinds(keybindMap: Record<string, string[]>): void {

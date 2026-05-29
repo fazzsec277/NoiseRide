@@ -7,14 +7,14 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-class RandomQueueManager {
+export class RandomQueueManager {
   private queue: string[] = []
   private activePresetId: string | null = null
   private sourceIds: string[] = []
   private isActive = false
   private currentPlayingId: string | null = null
-  private playedHistory: string[] = []   // 戻る用スタック [oldest ... newest]
-  private futureQueue: string[] = []     // 進む用スタック [oldest ... newest(=直前に戻った曲)]
+  private playedHistory: string[] = []
+  private futureQueue: string[] = []
 
   start(presetId: string, mp3Ids: string[]): void {
     this.activePresetId = presetId
@@ -44,16 +44,10 @@ class RandomQueueManager {
     this.currentPlayingId = id
   }
 
-  /** 後ろ向き再生専用 — 履歴を変更しない */
   setCurrentPlayingBack(id: string): void {
     this.currentPlayingId = id
   }
 
-  /**
-   * 次トラック再生前に呼ぶ。
-   * 現在曲を playedHistory に積んで currentPlayingId を null にする。
-   * これにより onEnded の二重発火を防ぎつつ、戻る履歴も正しく保持する。
-   */
   prepareForNextTrack(): void {
     if (this.currentPlayingId !== null) {
       this.playedHistory.push(this.currentPlayingId)
@@ -78,7 +72,6 @@ class RandomQueueManager {
     return this.currentPlayingId
   }
 
-  /** 前の曲を返す。現在曲を futureQueue に積んでから history をポップする。 */
   getPrevious(): string | null {
     if (this.playedHistory.length === 0) return null
     if (this.currentPlayingId !== null) {
@@ -91,11 +84,6 @@ class RandomQueueManager {
     return this.playedHistory.length > 0
   }
 
-  /**
-   * 次の曲を返す。
-   * futureQueue に曲がある場合はそちらを優先する（⏮ 後に⏭ で同じ曲に戻る挙動）。
-   * なければシャッフルキューから取り出す。
-   */
   getNext(): string | null {
     if (!this.isActive || this.sourceIds.length === 0) return null
     if (this.futureQueue.length > 0) {
@@ -114,6 +102,55 @@ class RandomQueueManager {
   get currentPresetId(): string | null {
     return this.activePresetId
   }
+
+  getPlayedHistory(): string[] {
+    return [...this.playedHistory]
+  }
+
+  getRemainingQueue(): string[] {
+    return [...this.queue]
+  }
 }
 
-export const randomQueueManager = new RandomQueueManager()
+class RandomRegistry {
+  private managers = new Map<string, RandomQueueManager>()
+
+  getOrCreate(presetId: string): RandomQueueManager {
+    if (!this.managers.has(presetId)) {
+      this.managers.set(presetId, new RandomQueueManager())
+    }
+    return this.managers.get(presetId)!
+  }
+
+  get(presetId: string): RandomQueueManager | undefined {
+    return this.managers.get(presetId)
+  }
+
+  delete(presetId: string): void {
+    const manager = this.managers.get(presetId)
+    if (manager) {
+      manager.stop()
+      this.managers.delete(presetId)
+    }
+  }
+
+  stopAll(): void {
+    this.managers.forEach((manager) => manager.stop())
+    this.managers.clear()
+  }
+
+  findByTrackId(trackId: string): [string, RandomQueueManager] | undefined {
+    for (const [presetId, manager] of this.managers) {
+      if (manager.isCurrentRandom(trackId)) {
+        return [presetId, manager]
+      }
+    }
+    return undefined
+  }
+
+  isActive(presetId: string): boolean {
+    return this.managers.get(presetId)?.active ?? false
+  }
+}
+
+export const randomRegistry = new RandomRegistry()

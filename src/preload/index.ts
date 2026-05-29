@@ -87,6 +87,14 @@ const api = {
       return () => ipcRenderer.off('random:stop', h)
     }
   },
+  lastPlayed: {
+    setKey: (acc: string): Promise<void> => ipcRenderer.invoke('lastPlayed:setKey', acc),
+    onTrigger: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('lastPlayed:trigger', h)
+      return () => ipcRenderer.off('lastPlayed:trigger', h)
+    }
+  },
   dialog: {
     openMp3: (): Promise<string[]> => ipcRenderer.invoke('dialog:openMp3')
   },
