@@ -14219,7 +14219,13 @@ function Header({ onSettingsClick }) {
   };
   const handleMicGainChange = (e) => {
     const gain = parseFloat(e.target.value);
-    updateSettings({ micInputGain: gain });
+    if (settings.micMuted && gain > 0) {
+      updateSettings({ micMuted: false, micInputGain: gain });
+      micManager.setMuted(false);
+    } else {
+      updateSettings({ micInputGain: gain });
+    }
+    preMuteMicGain.current = gain;
     micManager.setGain(gain);
   };
   const handleMicDeviceChange = (deviceId) => {
@@ -14908,14 +14914,14 @@ function Mp3NameEditor({ name, onSave }) {
     }
   ) });
 }
-const wrapper = "_wrapper_1mggd_1";
+const wrapper$1 = "_wrapper_1mggd_1";
 const keyBadge$2 = "_keyBadge_1mggd_8";
 const warn = "_warn_1mggd_22";
 const removeKey = "_removeKey_1mggd_28";
 const captureBtn = "_captureBtn_1mggd_39";
 const capturing = "_capturing_1mggd_54";
 const styles$5 = {
-  wrapper,
+  wrapper: wrapper$1,
   keyBadge: keyBadge$2,
   warn,
   removeKey,
@@ -15309,24 +15315,26 @@ function Mp3ItemRow({ mp3, onHandlePointerDown }) {
     )
   ] });
 }
-const container$1 = "_container_ttpi9_1";
-const empty = "_empty_ttpi9_7";
-const list = "_list_ttpi9_18";
-const header$1 = "_header_ttpi9_22";
-const colDrag = "_colDrag_ttpi9_38";
-const colName = "_colName_ttpi9_39";
-const colKeys = "_colKeys_ttpi9_40";
-const colDur = "_colDur_ttpi9_41";
-const colVolume = "_colVolume_ttpi9_42";
-const colStatus = "_colStatus_ttpi9_43";
-const colActions = "_colActions_ttpi9_44";
-const dropTarget = "_dropTarget_ttpi9_49";
-const colSortable = "_colSortable_ttpi9_55";
-const colSortActive = "_colSortActive_ttpi9_66";
-const colSortReset = "_colSortReset_ttpi9_70";
-const sortArrow = "_sortArrow_ttpi9_79";
-const colRandomSortDisabled = "_colRandomSortDisabled_ttpi9_88";
+const wrapper = "_wrapper_lkw34_1";
+const container$1 = "_container_lkw34_9";
+const empty = "_empty_lkw34_15";
+const list = "_list_lkw34_26";
+const header$1 = "_header_lkw34_30";
+const colDrag = "_colDrag_lkw34_44";
+const colName = "_colName_lkw34_45";
+const colKeys = "_colKeys_lkw34_46";
+const colDur = "_colDur_lkw34_47";
+const colVolume = "_colVolume_lkw34_48";
+const colStatus = "_colStatus_lkw34_49";
+const colActions = "_colActions_lkw34_50";
+const dropTarget = "_dropTarget_lkw34_55";
+const colSortable = "_colSortable_lkw34_61";
+const colSortActive = "_colSortActive_lkw34_72";
+const colSortReset = "_colSortReset_lkw34_76";
+const sortArrow = "_sortArrow_lkw34_85";
+const colRandomSortDisabled = "_colRandomSortDisabled_lkw34_94";
 const styles$2 = {
+  wrapper,
   container: container$1,
   empty,
   list,
@@ -15461,9 +15469,9 @@ function Mp3List({ mp3s, activePresetId }) {
     dragFromIdx.current = null;
     setDropIdx(null);
   };
-  const dragColIcon = sortField === "default" ? "▶" : sortField === "randomQueue" ? "⇄" : "≡";
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.container, children: mp3s.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.empty, children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "MP3ファイルをドラッグ&ドロップするか、「+ 追加」ボタンで追加してください" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.list, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.header, children: [
+  const dragColIcon = sortField === "default" ? "▶" : "≡";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.wrapper, children: [
+    mp3s.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: styles$2.header, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "span",
         {
@@ -15538,7 +15546,7 @@ function Mp3List({ mp3s, activePresetId }) {
         }
       )
     ] }),
-    displayMp3s.map((mp3, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.container, children: mp3s.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.empty, children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "MP3ファイルをドラッグ&ドロップするか、「+ 追加」ボタンで追加してください" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: styles$2.list, children: displayMp3s.map((mp3, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
         ref: (el) => {
@@ -15569,8 +15577,8 @@ function Mp3List({ mp3s, activePresetId }) {
         )
       },
       mp3.id
-    ))
-  ] }) });
+    )) }) })
+  ] });
 }
 const overlay = "_overlay_kigzj_1";
 const modal = "_modal_kigzj_11";

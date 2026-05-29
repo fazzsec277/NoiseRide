@@ -947,13 +947,21 @@
 ._seekBar_17wyn_213:hover ._seekHandle_17wyn_238 {
   opacity: 1;
 }
-._container_ttpi9_1 {
+._wrapper_lkw34_1 {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--bg-primary);
 }
 
-._empty_ttpi9_7 {
+._container_lkw34_9 {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+._empty_lkw34_15 {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -964,11 +972,11 @@
   line-height: 1.6;
 }
 
-._list_ttpi9_18 {
+._list_lkw34_26 {
   padding: 0;
 }
 
-._header_ttpi9_22 {
+._header_lkw34_30 {
   display: grid;
   grid-template-columns: 24px 1fr 200px 110px 110px 70px 40px;
   padding: 6px 12px;
@@ -979,62 +987,60 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex-shrink: 0;
 }
 
-._colDrag_ttpi9_38,
-._colName_ttpi9_39,
-._colKeys_ttpi9_40,
-._colDur_ttpi9_41,
-._colVolume_ttpi9_42,
-._colStatus_ttpi9_43,
-._colActions_ttpi9_44 {
+._colDrag_lkw34_44,
+._colName_lkw34_45,
+._colKeys_lkw34_46,
+._colDur_lkw34_47,
+._colVolume_lkw34_48,
+._colStatus_lkw34_49,
+._colActions_lkw34_50 {
   display: flex;
   align-items: center;
 }
 
-._dropTarget_ttpi9_49 {
+._dropTarget_lkw34_55 {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: var(--radius-sm);
 }
 
-._colSortable_ttpi9_55 {
+._colSortable_lkw34_61 {
   cursor: pointer;
   user-select: none;
   gap: 4px;
   transition: color 0.1s;
 }
 
-._colSortable_ttpi9_55:hover {
+._colSortable_lkw34_61:hover {
   color: var(--text-primary);
 }
 
-._colSortActive_ttpi9_66 {
+._colSortActive_lkw34_72 {
   color: var(--accent);
 }
 
-._colSortReset_ttpi9_70 {
+._colSortReset_lkw34_76 {
   color: var(--text-muted);
   justify-content: center;
 }
 
-._colSortReset_ttpi9_70:hover {
+._colSortReset_lkw34_76:hover {
   color: var(--text-primary);
 }
 
-._sortArrow_ttpi9_79 {
+._sortArrow_lkw34_85 {
   font-size: 9px;
   opacity: 0.8;
 }
 
-._colActions_ttpi9_44 {
+._colActions_lkw34_50 {
   justify-content: center;
 }
 
-._colRandomSortDisabled_ttpi9_88 {
+._colRandomSortDisabled_lkw34_94 {
   opacity: 0.3;
   cursor: default;
   pointer-events: none;

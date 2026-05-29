@@ -147,7 +147,7 @@ export function Mp3List({ mp3s, activePresetId }: Props): JSX.Element {
     setDropIdx(null)
   }
 
-  const dragColIcon = sortField === 'default' ? '▶' : sortField === 'randomQueue' ? '⇄' : '≡'
+  const dragColIcon = sortField === 'default' ? '▶' : '≡'
 
   return (
     <div className={styles.wrapper}>
